@@ -1354,7 +1354,7 @@ function renderAttendance(p) {
                     </td>`;
                 }).join('')}
                 <td class="tc fw6 fs12" style="color:var(--gray-700);">${wd>0?wd+'N':'-'}</td>
-                <td class="tr fw6 c-blue fs12">${wp>0?fmtMoney(wp):'-'}</td>
+                <td class="tr fw6 c-blue fs12">${(()=>{const s=getWorkerSupport(p,w.id,sunStr);return (wp+s)>0?fmtMoney(wp+s):'-';})()}</td>
                 <td class="tr fs12">${p.status==='active'?`<div onclick="editWorkerSupport('${p.id}','${w.id}','${sunStr}')"
                      style="cursor:pointer;padding:2px 4px;border-radius:6px;min-width:40px;text-align:right;
                             ${getWorkerSupport(p,w.id,sunStr)?'color:var(--warning);font-weight:700;':'color:var(--gray-300);'}">
@@ -1390,8 +1390,8 @@ function renderAttendance(p) {
             <td class="col-name">Tổng tuần</td>
             <td colspan="${days.length}"></td>
             <td></td>
-            <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal - weekSupportTotal)}</td>
-            <td class="tr" style="color:var(--warning);">${weekSupportTotal>0?fmtMoney(weekSupportTotal):'-'}</td>
+            <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal)}</td>
+            <td></td>
         </tr></tfoot>
     </table>
     </div>
