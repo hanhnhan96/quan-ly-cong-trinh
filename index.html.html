@@ -1,0 +1,2288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Quản Lý Công Trình</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #dbeafe;
+            --success: #16a34a;
+            --success-light: #dcfce7;
+            --danger: #dc2626;
+            --danger-light: #fee2e2;
+            --warning: #d97706;
+            --warning-light: #fef3c7;
+            --purple: #7c3aed;
+            --purple-light: #ede9fe;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-900: #111827;
+            --sidebar-bg: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--gray-50); color: var(--gray-900);
+            height: 100dvh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* ===== LOGIN SCREEN ===== */
+        #login-screen {
+            position: fixed; inset: 0; z-index: 9999;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .login-box {
+            background: white; border-radius: 20px; padding: 36px 32px;
+            width: 100%; max-width: 380px; box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+        }
+        .login-logo { text-align: center; font-size: 48px; margin-bottom: 8px; }
+        .login-title { text-align: center; font-size: 22px; font-weight: 800; color: var(--gray-900); margin-bottom: 4px; }
+        .login-sub { text-align: center; font-size: 13px; color: var(--gray-400); margin-bottom: 28px; }
+        .login-field { margin-bottom: 16px; }
+        .login-field label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
+        .login-field input {
+            width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-200);
+            border-radius: 10px; font-size: 15px; outline: none; transition: border 0.15s;
+        }
+        .login-field input:focus { border-color: var(--primary); }
+        .login-btn {
+            width: 100%; padding: 13px; background: var(--primary); color: white;
+            border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+            cursor: pointer; transition: background 0.15s; margin-top: 4px;
+        }
+        .login-btn:hover { background: #1d4ed8; }
+        .login-err { color: var(--danger); font-size: 13px; text-align: center; margin-top: 10px; min-height: 18px; }
+        #login-screen.hidden { display: none; }
+
+        /* ===== TOPBAR (mobile) ===== */
+        .topbar {
+            display: none; background: var(--sidebar-bg);
+            padding: 10px 14px; align-items: center;
+            justify-content: space-between; flex-shrink: 0; z-index: 100;
+        }
+        .topbar-title { color: white; font-size: 15px; font-weight: 700; }
+        .topbar-right  { display: flex; align-items: center; gap: 8px; }
+        .hamburger     { background: none; border: none; color: white; font-size: 22px; cursor: pointer; padding: 4px 6px; line-height: 1; }
+        .proj-selector-btn {
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 7px; color: white; font-size: 13px; font-weight: 500;
+            padding: 5px 10px; cursor: pointer; max-width: 160px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* ===== LAYOUT ===== */
+        .app-body { display: flex; flex: 1; overflow: hidden; }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            width: 260px; min-width: 260px; background: var(--sidebar-bg);
+            display: flex; flex-direction: column; height: 100%;
+            overflow: hidden; transition: transform 0.25s ease; z-index: 200;
+        }
+        .sidebar-header { padding: 14px 14px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .sidebar-logo  { font-size: 20px; margin-bottom: 2px; }
+        .sidebar-title { font-size: 14px; font-weight: 700; color: white; }
+        .sidebar-sub   { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+
+        /* Global views */
+        .sidebar-views { padding: 8px 8px 4px; }
+        .view-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 10px; border-radius: 8px; cursor: pointer;
+            font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.75);
+            transition: background 0.12s; margin-bottom: 2px;
+        }
+        .view-item:hover { background: rgba(255,255,255,0.08); }
+        .view-item.active { background: rgba(37,99,235,0.3); color: white; }
+        .view-item-icon { font-size: 15px; }
+
+        .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0; }
+
+        .sidebar-section {
+            padding: 10px 16px 4px; font-size: 10px; font-weight: 700;
+            color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.08em;
+        }
+
+        .project-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; -webkit-overflow-scrolling: touch; }
+
+        .project-item {
+            display: flex; align-items: center; gap: 9px;
+            padding: 9px 10px; border-radius: 8px; cursor: pointer;
+            margin-bottom: 2px; transition: background 0.12s;
+            border-left: 3px solid transparent;
+        }
+        .project-item:hover { background: rgba(255,255,255,0.08); }
+        .project-item.active { background: rgba(37,99,235,0.25); border-left-color: #3b82f6; }
+
+        .project-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .project-dot.active    { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+        .project-dot.completed { background: #64748b; }
+
+        .project-info { flex: 1; min-width: 0; }
+        .project-name { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .project-meta { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 1px; }
+
+        .sidebar-footer { padding: 8px 8px 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .user-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 7px 10px; margin-bottom: 6px;
+            background: rgba(255,255,255,0.06); border-radius: 8px;
+        }
+        .user-bar-name { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 600; }
+        .user-bar-role { font-size: 10px; color: rgba(255,255,255,0.35); }
+        .btn-logout {
+            background: none; border: none; color: rgba(255,255,255,0.4);
+            cursor: pointer; font-size: 16px; padding: 2px 4px; line-height: 1;
+        }
+        .btn-logout:hover { color: var(--danger); }
+        .btn-new-project {
+            width: 100%; padding: 9px 12px;
+            background: rgba(37,99,235,0.35); border: 1px dashed rgba(96,165,250,0.4);
+            border-radius: 8px; color: rgba(255,255,255,0.85); cursor: pointer;
+            font-size: 13px; font-weight: 500; text-align: center; transition: all 0.15s;
+        }
+        .btn-new-project:hover { background: rgba(37,99,235,0.5); }
+
+        .btn-cloud {
+            width: 100%; padding: 8px 12px; margin-top: 6px;
+            background: none; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; color: rgba(255,255,255,0.5); cursor: pointer;
+            font-size: 12px; text-align: center; transition: all 0.15s;
+        }
+        .btn-cloud:hover { border-color: rgba(255,255,255,0.35); color: rgba(255,255,255,0.8); }
+        .btn-cloud.connected { color: #4ade80; border-color: rgba(74,222,128,0.4); }
+        .btn-sheets { width: 100%; padding: 8px 12px; margin-top: 6px;
+            background: none; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; color: rgba(255,255,255,0.5); cursor: pointer;
+            font-size: 12px; text-align: center; transition: all 0.15s; }
+        .btn-sheets:hover { border-color: rgba(255,255,255,0.35); color: rgba(255,255,255,0.8); }
+        .btn-sheets.configured { color: #34d399; border-color: rgba(52,211,153,0.4); }
+
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 150; }
+
+        /* ===== MAIN ===== */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+        .main-header {
+            background: white; border-bottom: 1px solid var(--gray-200);
+            padding: 12px 16px; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0; gap: 10px;
+        }
+        .main-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+        .main-meta  { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+        .header-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+        /* ===== TABS ===== */
+        .tabs-bar {
+            background: white; border-bottom: 1px solid var(--gray-200);
+            display: flex; flex-shrink: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+        }
+        .tabs-bar::-webkit-scrollbar { display: none; }
+        .tab {
+            padding: 11px 13px; font-size: 13px; font-weight: 500;
+            cursor: pointer; border-bottom: 2px solid transparent;
+            color: var(--gray-500); transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+        }
+        .tab:hover { color: var(--gray-900); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        .tab-content {
+            flex: 1; overflow-y: auto; padding: 16px; background: var(--gray-50);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+            cursor: pointer; border: none; transition: all 0.15s;
+            white-space: nowrap; touch-action: manipulation;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #15803d; }
+        .btn-danger  { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-warning:hover { background: #b45309; }
+        .btn-purple  { background: var(--purple); color: white; }
+        .btn-purple:hover { background: #6d28d9; }
+        .btn-outline { background: white; color: var(--gray-700); border: 1px solid var(--gray-300); }
+        .btn-outline:hover { background: var(--gray-50); }
+        .btn-ghost { background: none; color: var(--gray-500); border: none; }
+        .btn-ghost:hover { color: var(--danger); background: var(--danger-light); }
+        .btn-sm { padding: 6px 11px; font-size: 12px; }
+        .btn-xs { padding: 3px 8px; font-size: 11px; }
+
+        /* ===== CARDS ===== */
+        .card { background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 16px; margin-bottom: 14px; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+        .card-title { font-size: 14px; font-weight: 600; color: var(--gray-700); }
+
+        /* ===== STATS ===== */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .stat-card { background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 14px 16px; }
+        .stat-label { font-size: 11px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .stat-value { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; word-break: break-all; }
+        .stat-value.positive { color: var(--success); }
+        .stat-value.negative { color: var(--danger); }
+        .stat-value.blue     { color: var(--primary); }
+        .stat-value.neutral  { color: var(--gray-900); }
+        .stat-value.warning  { color: var(--warning); }
+        .stat-value.purple   { color: var(--purple); }
+
+        /* ===== ATTENDANCE TABLE ===== */
+        .att-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--gray-200); -webkit-overflow-scrolling: touch; }
+        .att-table { width: 100%; border-collapse: collapse; background: white; min-width: 680px; }
+        .att-table th { background: var(--gray-50); padding: 8px 6px; font-size: 11px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); white-space: nowrap; }
+        .att-table th.col-name { text-align: left; min-width: 140px; padding-left: 12px; }
+        .att-table th.col-sun  { color: var(--purple); background: var(--purple-light); }
+        .att-table th.today-col { background: #eff6ff; }
+        .att-table td { padding: 6px 6px; text-align: center; border-bottom: 1px solid var(--gray-100); font-size: 13px; }
+        .att-table td.col-name { text-align: left; padding-left: 12px; }
+        .att-table tbody tr:last-child td { border-bottom: none; }
+        .att-table td.today-cell { background: #f8faff; }
+        .att-cell {
+            width: 36px; height: 34px; border-radius: 7px; cursor: pointer;
+            border: 1.5px solid var(--gray-200); background: white;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700; transition: all 0.12s;
+            user-select: none; touch-action: manipulation;
+        }
+        .att-cell:active { transform: scale(0.9); }
+        .att-cell.full     { background: #dcfce7; border-color: #86efac; color: #15803d; }
+        .att-cell.half     { background: #fef9c3; border-color: #fde047; color: #854d0e; }
+        .att-cell.overtime { background: var(--purple-light); border-color: #c4b5fd; color: #5b21b6; }
+        .att-cell.absent   { background: white; border-color: var(--gray-200); color: var(--gray-300); }
+        .att-table tfoot tr td { background: var(--gray-50); font-weight: 700; border-top: 2px solid var(--gray-200); border-bottom: none; font-size: 12px; padding: 9px 6px; }
+
+        /* ===== WEEK NAV ===== */
+        .week-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+        .week-label { font-size: 13px; font-weight: 700; text-align: center; color: var(--gray-700); flex: 1; min-width: 160px; }
+        .legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gray-500); flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 3px; }
+        .legend-dot { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+        /* ===== DATA TABLE ===== */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background: var(--gray-50); padding: 8px 10px; font-size: 11px; font-weight: 700; text-align: left; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; }
+        .data-table td { padding: 10px 10px; border-bottom: 1px solid var(--gray-100); font-size: 13px; }
+        .data-table tbody tr:last-child td { border-bottom: none; }
+        .data-table tbody tr:hover td { background: var(--gray-50); }
+        .data-table tfoot td { padding: 10px; background: var(--gray-50); font-weight: 700; font-size: 13px; border-top: 2px solid var(--gray-200); }
+
+        /* ===== SUMMARY TABLE ===== */
+        .sum-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .sum-table { width: 100%; border-collapse: collapse; min-width: 400px; }
+        .sum-table th { background: var(--gray-50); padding: 8px 10px; font-size: 11px; font-weight: 700; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+        .sum-table th.th-worker { text-align: left; min-width: 150px; }
+        .sum-table td { padding: 0; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+        .sum-table tbody tr:last-child td { border-bottom: none; }
+        .sum-table tfoot td { padding: 10px; background: var(--gray-50); font-weight: 700; font-size: 13px; border-top: 2px solid var(--gray-200); }
+        .sum-worker-row { padding: 10px 10px 6px; }
+        .sum-worker-name { font-size: 13px; font-weight: 600; }
+        .sum-proj-list { padding: 0 10px 8px; }
+        .sum-proj-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 3px 0; color: var(--gray-600); border-bottom: 1px dashed var(--gray-100); }
+        .sum-proj-row:last-child { border-bottom: none; }
+
+        /* ===== WORKER CARD (workers view) ===== */
+        .worker-card {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px; background: white; border-radius: 10px;
+            border: 1px solid var(--gray-200); margin-bottom: 8px;
+        }
+        .worker-avatar {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--primary-light); color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: 700; flex-shrink: 0;
+        }
+        .worker-info { flex: 1; min-width: 0; }
+        .worker-name { font-size: 14px; font-weight: 600; }
+        .worker-meta { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+        .worker-wage { font-size: 13px; font-weight: 700; color: var(--success); }
+        .worker-actions { display: flex; gap: 4px; }
+
+        /* ===== TAGS / BADGES ===== */
+        .tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .tag-material { background: #dbeafe; color: #1e40af; }
+        .tag-other    { background: var(--purple-light); color: #5b21b6; }
+        .tag-advance  { background: var(--success-light); color: var(--success); }
+        .tag-current  { background: var(--success-light); color: var(--success); }
+
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-active    { background: var(--success-light); color: var(--success); }
+        .badge-completed { background: var(--gray-100); color: var(--gray-500); }
+
+        /* ===== MODAL ===== */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(15,23,42,0.6);
+            display: flex; align-items: flex-end; justify-content: center;
+            z-index: 9999; backdrop-filter: blur(3px);
+        }
+        .modal {
+            background: white; border-radius: 20px 20px 0 0;
+            padding: 20px 20px 32px; width: 100%; max-width: 540px;
+            max-height: 92dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
+        }
+        .modal-handle { width: 36px; height: 4px; background: var(--gray-300); border-radius: 2px; margin: 0 auto 16px; }
+        .modal-title  { font-size: 17px; font-weight: 700; margin-bottom: 18px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gray-100); }
+
+        /* ===== FORM ===== */
+        .form-group { margin-bottom: 14px; }
+        .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 5px; }
+        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-200); border-radius: 10px; font-size: 15px; color: var(--gray-900); outline: none; transition: border-color 0.15s; background: white; -webkit-appearance: none; }
+        .form-input:focus, .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .form-hint { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+
+        /* Checkbox list for assign workers */
+        .check-list { max-height: 320px; overflow-y: auto; border: 1.5px solid var(--gray-200); border-radius: 10px; }
+        .check-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--gray-100); cursor: pointer; transition: background 0.1s; }
+        .check-item:last-child { border-bottom: none; }
+        .check-item:hover { background: var(--gray-50); }
+        .check-item input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--primary); flex-shrink: 0; cursor: pointer; }
+        .check-item-info { flex: 1; min-width: 0; }
+        .check-item-name { font-size: 13px; font-weight: 600; }
+        .check-item-meta { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+
+        /* ===== MISC ===== */
+        .empty { text-align: center; padding: 32px 16px; color: var(--gray-400); }
+        .empty-icon  { font-size: 36px; margin-bottom: 8px; }
+        .empty-title { font-size: 15px; font-weight: 600; color: var(--gray-500); margin-bottom: 5px; }
+        .empty-desc  { font-size: 12px; }
+
+        .no-project { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--gray-50); gap: 10px; padding: 20px; text-align: center; }
+
+        .pl-table { width: 100%; border-collapse: collapse; }
+        .pl-table td { padding: 9px 4px; font-size: 13px; border-bottom: 1px solid var(--gray-100); }
+        .pl-table tbody tr:last-child td { border-bottom: none; }
+        .pl-table td:last-child { text-align: right; font-weight: 600; }
+        .pl-table tfoot td { padding: 10px 4px; font-weight: 700; font-size: 15px; border-top: 2px solid var(--gray-200); }
+
+        .info-box { border-radius: 10px; padding: 11px 13px; font-size: 13px; margin-bottom: 12px; }
+        .info-box.blue   { background: var(--primary-light); color: #1e40af; border: 1px solid #93c5fd; }
+        .info-box.green  { background: var(--success-light); color: #14532d; border: 1px solid #86efac; }
+        .info-box.yellow { background: var(--warning-light); color: #78350f; border: 1px solid #fcd34d; }
+        .info-box.red    { background: var(--danger-light);  color: #7f1d1d; border: 1px solid #fca5a5; }
+        .info-box.purple { background: var(--purple-light); color: #4c1d95; border: 1px solid #c4b5fd; }
+
+        .pay-row { display: flex; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--gray-100); font-size: 13px; gap: 8px; }
+        .pay-row:last-child { border-bottom: none; }
+
+        .wage-history { margin-top: 14px; border-top: 1px solid var(--gray-100); padding-top: 14px; }
+        .wage-hist-row { display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--gray-100); font-size: 12px; gap: 8px; }
+        .wage-hist-row:last-child { border-bottom: none; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+        .tr { text-align: right; }
+        .tc { text-align: center; }
+        .fw7 { font-weight: 700; }
+        .fw6 { font-weight: 600; }
+        .fs11 { font-size: 11px; }
+        .fs12 { font-size: 12px; }
+        .c-gray   { color: var(--gray-400); }
+        .c-green  { color: var(--success); }
+        .c-red    { color: var(--danger); }
+        .c-blue   { color: var(--primary); }
+        .c-orange { color: var(--warning); }
+        .c-purple { color: var(--purple); }
+        .divider  { border: none; border-top: 1px solid var(--gray-200); margin: 12px 0; }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 2px; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 700px) {
+            .topbar { display: flex !important; }
+            .sidebar { position: fixed; top: 0; left: 0; height: 100dvh; transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.open { display: block !important; }
+            .app-body { flex-direction: column; }
+            .main-header { padding: 10px 12px; }
+            .main-title  { font-size: 14px; }
+            .header-actions .btn { font-size: 11px; padding: 5px 8px; }
+            .tab-content { padding: 10px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .stat-value { font-size: 15px; }
+            .two-col { grid-template-columns: 1fr; }
+            .modal { border-radius: 20px 20px 0 0; max-height: 95dvh; }
+            .att-table th, .att-table td { padding: 5px 4px; }
+            .att-cell { width: 32px; height: 30px; font-size: 9px; }
+        }
+        @media (min-width: 701px) {
+            .topbar { display: none !important; }
+            .sidebar { position: static !important; transform: none !important; }
+            .app-body { flex-direction: row; height: 100%; }
+            .modal { border-radius: 16px; margin: auto; }
+            .modal-overlay { align-items: center; }
+        }
+    </style>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+    <div class="login-box">
+        <div class="login-logo">🏗️</div>
+        <div class="login-title">Quản Lý Công Trình</div>
+        <div class="login-sub">Đăng nhập để tiếp tục</div>
+        <div class="login-field">
+            <label>Tên đăng nhập</label>
+            <input type="text" id="login-user" placeholder="Nhập tên đăng nhập" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+        </div>
+        <div class="login-field">
+            <label>Mật khẩu</label>
+            <input type="password" id="login-pass" placeholder="Nhập mật khẩu" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="login-btn" onclick="doLogin()">Đăng nhập</button>
+        <div class="login-err" id="login-err"></div>
+    </div>
+</div>
+
+<!-- MOBILE TOPBAR -->
+<div class="topbar" id="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title" id="topbar-title">🏗️ Công Trình</div>
+    <div class="topbar-right">
+        <button class="proj-selector-btn" id="topbar-proj-btn" onclick="toggleSidebar()">Menu</button>
+    </div>
+</div>
+
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<div class="app-body">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">🏗️</div>
+            <div class="sidebar-title">Quản Lý Công Trình</div>
+            <div class="sidebar-sub">Chấm công & Chi phí</div>
+        </div>
+
+        <!-- Global views -->
+        <div class="sidebar-views">
+            <div class="view-item" id="vi-workers" onclick="selectView('workers')">
+                <span class="view-item-icon">👷</span> Danh sách thợ
+            </div>
+            <div class="view-item" id="vi-summary" onclick="selectView('summary')">
+                <span class="view-item-icon">📊</span> Tổng lương tuần
+            </div>
+        </div>
+
+        <hr class="sidebar-divider">
+        <div class="sidebar-section">Công trình (<span id="proj-count">0</span>)</div>
+        <div class="project-list" id="proj-list"></div>
+
+        <div class="sidebar-footer">
+            <div class="user-bar" id="user-bar">
+                <div>
+                    <div class="user-bar-name" id="user-bar-name">---</div>
+                    <div class="user-bar-role" id="user-bar-role"></div>
+                </div>
+                <button class="btn-logout" onclick="doLogout()" title="Đăng xuất">⏻</button>
+            </div>
+            <button class="btn-new-project" onclick="openModal('new-proj')">+ Thêm công trình mới</button>
+            <button class="btn-cloud" id="cloud-btn" onclick="openModal('firebase-setup')">☁️ Kết nối đám mây</button>
+            <button class="btn-sheets" id="sheets-btn" onclick="openModal('sheets-sync')">📊 Đồng bộ Google Sheets</button>
+            <button class="btn-sheets" id="users-btn" onclick="openModal('manage-users')" style="display:none;">👥 Quản lý tài khoản</button>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main" id="main-area"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" style="display:none;" onclick="overlayClose(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div id="modal-content"></div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let S = {
+    workers:   [],   // global workers (DATA sheet)
+    projects:  [],
+    view:      'workers',  // 'workers' | 'summary' | <projectId>
+    tab:       'attendance',
+    weekStart: null,
+};
+let confirmCb = null, modalType = null, modalExtra = null;
+
+// ══════════════════════════════════════════════════════════
+//  PERSISTENCE
+// ══════════════════════════════════════════════════════════
+
+// ── Firebase ─────────────────────────────────────────────
+const FB_KEY = 'ct_firebase_cfg';
+const SHEETS_KEY = 'ct_sheets_url';
+let fbRef = null;
+
+// ── Auth ─────────────────────────────────────────────────
+let authRef = null;
+let currentUser = null; // { username, role: 'admin'|'viewer' }
+
+async function hashPassword(pass) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function getSession() {
+    try { return JSON.parse(sessionStorage.getItem('ct_session')); } catch(e) { return null; }
+}
+function setSession(u) { sessionStorage.setItem('ct_session', JSON.stringify(u)); }
+function clearSession() { sessionStorage.removeItem('ct_session'); }
+
+async function doLogin() {
+    const username = document.getElementById('login-user').value.trim();
+    const pass     = document.getElementById('login-pass').value;
+    const errEl    = document.getElementById('login-err');
+    if (!username || !pass) { errEl.textContent = 'Vui lòng nhập đủ thông tin.'; return; }
+    if (!authRef) { errEl.textContent = '⏳ Đang kết nối server, thử lại sau vài giây...'; return; }
+    errEl.textContent = 'Đang kiểm tra...';
+    try {
+        const hashed = await hashPassword(pass);
+        // Đọc users từ Firebase
+        const snap = await authRef.child(username).once('value');
+        const user = snap.val();
+        if (!user || user.password !== hashed) {
+            errEl.textContent = '❌ Sai tên đăng nhập hoặc mật khẩu.';
+            return;
+        }
+        currentUser = { username, role: user.role || 'viewer' };
+        setSession(currentUser);
+        showApp();
+    } catch(e) {
+        errEl.textContent = '❌ Lỗi kết nối. Thử lại sau.';
+        console.error(e);
+    }
+}
+
+function doLogout() {
+    if (!confirm('Đăng xuất?')) return;
+    clearSession();
+    currentUser = null;
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-err').textContent = '';
+}
+
+function showApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    // Cập nhật user bar
+    const n = document.getElementById('user-bar-name');
+    const r = document.getElementById('user-bar-role');
+    if (n) n.textContent = currentUser.username;
+    if (r) r.textContent = currentUser.role === 'admin' ? '👑 Quản trị' : '👁 Xem';
+    // Hiện nút quản lý nếu admin
+    const ub = document.getElementById('users-btn');
+    if (ub) ub.style.display = currentUser.role === 'admin' ? '' : 'none';
+    renderAll();
+}
+
+function initAuth() {
+    // Kiểm tra xem đã có tài khoản admin chưa (lần đầu chạy)
+    authRef.once('value', snap => {
+        const users = snap.val();
+        if (!users || Object.keys(users).length === 0) {
+            // Tạo tài khoản admin mặc định lần đầu
+            createDefaultAdmin();
+        } else {
+            // Kiểm tra session
+            const sess = getSession();
+            if (sess && users[sess.username]) {
+                currentUser = sess;
+                showApp();
+            }
+            // else: giữ màn hình đăng nhập
+        }
+    });
+}
+
+async function createDefaultAdmin() {
+    const hashed = await hashPassword('admin123');
+    await authRef.child('admin').set({ password: hashed, role: 'admin' });
+    // Giữ màn hình đăng nhập — không tự đăng nhập
+}
+
+// Modal quản lý tài khoản
+function mManageUsers() {
+    if (currentUser?.role !== 'admin') return '<div class="modal-title">Không có quyền</div>';
+    return `<div class="modal-title">👥 Quản lý tài khoản</div>
+    <div id="users-list" style="margin-bottom:16px;">Đang tải...</div>
+    <hr style="margin:12px 0;border-color:var(--gray-100);">
+    <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:10px;">➕ Thêm tài khoản mới</div>
+    <div style="display:grid;gap:8px;">
+        <input id="new-uname" class="form-input" placeholder="Tên đăng nhập" style="font-size:13px;">
+        <input id="new-upass" class="form-input" type="password" placeholder="Mật khẩu" style="font-size:13px;">
+        <select id="new-urole" class="form-input" style="font-size:13px;">
+            <option value="viewer">👁 Xem (không sửa được)</option>
+            <option value="admin">👑 Quản trị (toàn quyền)</option>
+        </select>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Đóng</button>
+        <button class="btn btn-primary" onclick="doAddUser()">Thêm tài khoản</button>
+    </div>`;
+}
+
+function loadUsersList() {
+    if (!authRef) return;
+    authRef.once('value', snap => {
+        const users = snap.val() || {};
+        const el = document.getElementById('users-list');
+        if (!el) return;
+        const list = Object.entries(users);
+        if (!list.length) { el.innerHTML = '<div style="color:var(--gray-400);font-size:13px;">Chưa có tài khoản</div>'; return; }
+        el.innerHTML = list.map(([uname, u]) => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--gray-50);border-radius:8px;margin-bottom:6px;">
+                <div>
+                    <div style="font-size:13px;font-weight:600;">${esc(uname)}</div>
+                    <div style="font-size:11px;color:var(--gray-400);">${u.role==='admin'?'👑 Quản trị':'👁 Xem'}</div>
+                </div>
+                ${uname !== currentUser.username ? `<button class="btn btn-ghost btn-xs" onclick="doDeleteUser('${esc(uname)}')">🗑️</button>` : '<span style="font-size:11px;color:var(--gray-300);">Bạn</span>'}
+            </div>`).join('');
+    });
+}
+
+async function doAddUser() {
+    const uname = document.getElementById('new-uname')?.value?.trim();
+    const upass = document.getElementById('new-upass')?.value;
+    const urole = document.getElementById('new-urole')?.value;
+    if (!uname || !upass) { alert('Vui lòng nhập đủ thông tin.'); return; }
+    if (uname.length < 3) { alert('Tên đăng nhập phải ít nhất 3 ký tự.'); return; }
+    if (upass.length < 6) { alert('Mật khẩu phải ít nhất 6 ký tự.'); return; }
+    const hashed = await hashPassword(upass);
+    await authRef.child(uname).set({ password: hashed, role: urole });
+    document.getElementById('new-uname').value = '';
+    document.getElementById('new-upass').value = '';
+    loadUsersList();
+    alert(`✅ Đã tạo tài khoản "${uname}"`);
+}
+
+function doDeleteUser(uname) {
+    if (!confirm(`Xóa tài khoản "${uname}"?`)) return;
+    authRef.child(uname).remove();
+    loadUsersList();
+}
+
+// Config mặc định — tự động kết nối khi mở app
+const DEFAULT_FB_CFG = {
+    apiKey: "AIzaSyCWpvhUW_dEdC3lU_dXRGlfio7yJC0qqqI",
+    authDomain: "quanlycongtrinh-d3175.firebaseapp.com",
+    databaseURL: "https://quanlycongtrinh-d3175-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "quanlycongtrinh-d3175",
+    storageBucket: "quanlycongtrinh-d3175.firebasestorage.app",
+    messagingSenderId: "140921301117",
+    appId: "1:140921301117:web:241e508b72ded43973e914"
+};
+
+function getFBCfg() {
+    try { return JSON.parse(localStorage.getItem(FB_KEY)); } catch(e) { return null; }
+}
+
+function initFirebase(cfg) {
+    try {
+        if (!firebase.apps.length) firebase.initializeApp(cfg);
+        const db = firebase.database();
+        fbRef = db.ref('congtrinh');
+        authRef = db.ref('ct_auth');
+        initAuth();
+
+        // Lắng nghe thay đổi từ tất cả thiết bị (real-time sync)
+        fbRef.on('value', snap => {
+            const d = snap.val();
+            if (!d) return;
+            S.workers  = d.workers  || [];
+            S.projects = d.projects || [];
+            localStorage.setItem('ct_v5', JSON.stringify({ workers: S.workers, projects: S.projects }));
+            renderAll();
+        });
+
+        updateCloudBtn(true);
+    } catch(e) {
+        console.error('Firebase:', e);
+        updateCloudBtn(false);
+    }
+}
+
+function updateCloudBtn(connected) {
+    const btn = document.getElementById('cloud-btn');
+    if (!btn) return;
+    btn.textContent = connected ? '☁️ Đang đồng bộ' : '☁️ Kết nối đám mây';
+    btn.classList.toggle('connected', connected);
+}
+
+// ── Load / Save ───────────────────────────────────────────
+function load() {
+    try {
+        const raw = localStorage.getItem('ct_v5');
+        if (raw) {
+            const d = JSON.parse(raw);
+            S.workers  = d.workers  || [];
+            S.projects = d.projects || [];
+        } else {
+            const old4 = localStorage.getItem('ct_v4') || localStorage.getItem('ct_v3');
+            if (old4) {
+                const d = JSON.parse(old4);
+                const m = migrateToV5(d);
+                S.workers  = m.workers;
+                S.projects = m.projects;
+                localStorage.setItem('ct_v5', JSON.stringify({ workers: S.workers, projects: S.projects }));
+            }
+        }
+    } catch(e) {}
+    S.weekStart = getSunday(new Date());
+
+    // Kết nối Firebase — dùng config đã lưu hoặc config mặc định
+    const fbCfg = getFBCfg() || DEFAULT_FB_CFG;
+    initFirebase(fbCfg);
+}
+
+function save() {
+    localStorage.setItem('ct_v5', JSON.stringify({ workers: S.workers, projects: S.projects }));
+    if (fbRef) {
+        fbRef.set({ workers: S.workers, projects: S.projects })
+             .catch(e => console.error('Firebase save:', e));
+    }
+}
+
+// ── Migration from v3/v4 ──────────────────────────────────
+function migrateToV5(old) {
+    if (!old || !old.projects) return { workers: [], projects: [] };
+    const nameToId = {};
+    const workers  = [];
+
+    old.projects.forEach(p => {
+        (p.employees || []).forEach(emp => {
+            const key = (emp.name || '').trim().toLowerCase();
+            if (!key) return;
+            if (!nameToId[key]) {
+                nameToId[key] = emp.id || uid();
+                workers.push({
+                    id: nameToId[key],
+                    name: emp.name.trim(),
+                    role: emp.role || '',
+                    wage: emp.wage || 0,
+                    wageHistory: emp.wageHistory || [{ id: uid(), wage: emp.wage || 0, from: '2020-01-01' }],
+                    notes: emp.notes || '',
+                });
+            }
+        });
+    });
+
+    const projects = old.projects.map(p => {
+        const empToWorker = {};
+        (p.employees || []).forEach(emp => {
+            const key = (emp.name || '').trim().toLowerCase();
+            if (nameToId[key]) empToWorker[emp.id] = nameToId[key];
+        });
+        const workerIds  = [...new Set(Object.values(empToWorker))];
+        const attendance = (p.attendance || []).map(a => ({
+            workerId: empToWorker[a.empId] || a.workerId || a.empId,
+            date: a.date, type: a.type,
+        }));
+        const { employees, ...rest } = p;
+        return { ...rest, workerIds, attendance, advances: p.advances || [], payments: p.payments || [] };
+    });
+
+    return { workers, projects };
+}
+
+// ══════════════════════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════════════════════
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+function fmtMoney(n) {
+    if (!n && n !== 0) return '0 ₫';
+    return Math.round(n).toLocaleString('vi-VN') + ' ₫';
+}
+function fmtDate(s) {
+    if (!s) return '';
+    const d = new Date(s + 'T00:00:00');
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+function fmtShort(d)  { return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
+function toYMD(d)     { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function todayYMD()   { return toYMD(new Date()); }
+
+// Week starts Sunday
+function getSunday(d) {
+    const dt = new Date(d);
+    dt.setDate(dt.getDate() - dt.getDay());
+    dt.setHours(0,0,0,0);
+    return dt;
+}
+function addDays(d, n) { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt; }
+function weekDays(sun) { return Array.from({length:7}, (_,i) => addDays(sun, i)); }
+
+// CN(0) T2(1) T3(2) T4(3) T5(4) T6(5) T7(6)
+const DN    = ['CN','T2','T3','T4','T5','T6','T7'];
+const DFULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+
+function attVal(t)   { return t==='full'?1 : t==='half'?0.5 : t==='overtime'?1 : 0; }
+function attLabel(t) { return t==='full'?'1N' : t==='half'?'½N' : t==='overtime'?'TC' : ''; }
+
+// Sunday = index 0 → overtime cycle
+function cycleAtt(cur, isSun) {
+    const c = isSun ? ['absent','overtime','full','half'] : ['absent','full','half'];
+    return c[(c.indexOf(cur)+1) % c.length];
+}
+
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function initials(name) {
+    const parts = (name||'').trim().split(/\s+/);
+    return parts.length >= 2
+        ? (parts[parts.length-2][0] + parts[parts.length-1][0]).toUpperCase()
+        : (name||'?')[0].toUpperCase();
+}
+
+// ══════════════════════════════════════════════════════════
+//  WAGE HISTORY
+// ══════════════════════════════════════════════════════════
+function effectiveWage(worker, dateStr) {
+    if (!worker.wageHistory || !worker.wageHistory.length) return worker.wage || 0;
+    const sorted = [...worker.wageHistory].sort((a,b) => a.from.localeCompare(b.from));
+    let w = sorted[0].wage;
+    for (const h of sorted) {
+        if (h.from <= dateStr) w = h.wage;
+        else break;
+    }
+    return w;
+}
+
+// ══════════════════════════════════════════════════════════
+//  DATA HELPERS
+// ══════════════════════════════════════════════════════════
+function proj(id)      { return S.projects.find(p => p.id === (id || S.view)); }
+function cur()         { return proj(S.view); }
+function worker(id)    { return S.workers.find(w => w.id === id); }
+
+// Workers assigned to a project
+function projWorkers(p) {
+    return (p.workerIds || []).map(id => S.workers.find(w => w.id === id)).filter(Boolean);
+}
+
+function getAtt(p, workerId, date) {
+    const r = (p.attendance||[]).find(a => (a.workerId||a.empId) === workerId && a.date === date);
+    return r ? r.type : 'absent';
+}
+
+function setAtt(p, workerId, date, type) {
+    if (!p.attendance) p.attendance = [];
+    const i = p.attendance.findIndex(a => (a.workerId||a.empId) === workerId && a.date === date);
+    if (type === 'absent') { if (i >= 0) p.attendance.splice(i, 1); }
+    else {
+        if (i >= 0) { p.attendance[i] = { workerId, date, type }; }
+        else p.attendance.push({ workerId, date, type });
+    }
+}
+
+function laborCost(p) {
+    let t = 0;
+    projWorkers(p).forEach(w => {
+        (p.attendance||[]).filter(a => (a.workerId||a.empId) === w.id).forEach(a => {
+            const wage = effectiveWage(w, a.date);
+            const r = a.type === 'overtime' ? wage * (p.otRate||1.5) : wage;
+            t += attVal(a.type) * r;
+        });
+    });
+    return t;
+}
+
+function materialCost(p) { return (p.expenses||[]).filter(e=>e.type==='material').reduce((s,e)=>s+(e.amount||0),0); }
+function otherCost(p)    { return (p.expenses||[]).filter(e=>e.type==='other').reduce((s,e)=>s+(e.amount||0),0); }
+function totalCost(p)    { return laborCost(p) + materialCost(p) + otherCost(p); }
+function totalAdvances(p){ return (p.advances||[]).reduce((s,x)=>s+(x.amount||0),0); }
+function totalPaid(p)    { return (p.payments||[]).reduce((s,x)=>s+(x.amount||0),0); }
+
+function workerLaborCost(p, w) {
+    return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
+        const wage = effectiveWage(w, a.date);
+        const r = a.type==='overtime' ? wage*(p.otRate||1.5) : wage;
+        return s + attVal(a.type)*r;
+    }, 0);
+}
+
+function workerTotalDays(p, w) {
+    return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>s+attVal(a.type),0);
+}
+
+function weekLaborWorker(p, w, days) {
+    return days.reduce((s,d) => {
+        const ds  = toYMD(d);
+        const att = getAtt(p, w.id, ds);
+        const wage = effectiveWage(w, ds);
+        const r   = att==='overtime' ? wage*(p.otRate||1.5) : wage;
+        return s + attVal(att)*r;
+    }, 0);
+}
+
+function weekDaysWorker(p, w, days) {
+    return days.reduce((s,d) => s + attVal(getAtt(p, w.id, toYMD(d))), 0);
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════
+function renderAll() { renderSidebar(); renderMain(); updateTopbar(); updateSheetsBtn(); }
+
+function renderSidebar() {
+    const active    = S.projects.filter(p=>p.status==='active');
+    const completed = S.projects.filter(p=>p.status==='completed');
+    document.getElementById('proj-count').textContent = S.projects.length;
+
+    // Highlight active view items
+    ['workers','summary'].forEach(v => {
+        const el = document.getElementById('vi-'+v);
+        if (el) el.classList.toggle('active', S.view === v);
+    });
+
+    let html = '';
+    if (active.length) {
+        html += active.map(projItem).join('');
+    }
+    if (completed.length) {
+        html += `<div class="sidebar-section" style="margin-top:6px;">Hoàn thành (${completed.length})</div>`;
+        html += completed.map(projItem).join('');
+    }
+    if (!S.projects.length) {
+        html = `<div style="padding:20px 12px;text-align:center;font-size:12px;color:rgba(255,255,255,0.2);">Chưa có công trình</div>`;
+    }
+    document.getElementById('proj-list').innerHTML = html;
+}
+
+function projItem(p) {
+    const isActive = p.id === S.view;
+    return `<div class="project-item ${isActive?'active':''}" onclick="selectView('${p.id}')">
+        <div class="project-dot ${p.status}"></div>
+        <div class="project-info">
+            <div class="project-name">${esc(p.name)}</div>
+            <div class="project-meta">${fmtDate(p.startDate)} · ${(p.workerIds||[]).length} thợ</div>
+        </div>
+    </div>`;
+}
+
+function renderMain() {
+    const el = document.getElementById('main-area');
+    if (S.view === 'workers')  { el.innerHTML = renderWorkersView(); return; }
+    if (S.view === 'summary')  { el.innerHTML = renderSummaryView(); return; }
+    const p = cur();
+    el.innerHTML = p ? renderProject(p) : renderEmpty();
+}
+
+function renderEmpty() {
+    return `<div class="no-project" style="height:100%;">
+        <div style="font-size:56px;">🏗️</div>
+        <div style="font-size:17px;font-weight:700;color:var(--gray-500);">Chọn hoặc tạo công trình</div>
+        <div style="font-size:13px;color:var(--gray-400);">Bấm "+ Thêm công trình mới" ở menu bên trái</div>
+        <button class="btn btn-primary" style="margin-top:10px;" onclick="openModal('new-proj')">+ Tạo công trình đầu tiên</button>
+    </div>`;
+}
+
+function updateTopbar() {
+    const btn = document.getElementById('topbar-proj-btn');
+    const title = document.getElementById('topbar-title');
+    if (S.view === 'workers')       { if(btn) btn.textContent='👷 Thợ';       if(title) title.textContent='👷 Thợ'; }
+    else if (S.view === 'summary')  { if(btn) btn.textContent='📊 Tổng lương'; if(title) title.textContent='📊 Tổng lương'; }
+    else { const p=cur(); if(btn) btn.textContent=p?p.name:'Menu'; if(title) title.textContent=p?p.name:'🏗️'; }
+}
+
+// ══════════════════════════════════════════════════════════
+//  WORKERS VIEW (DATA sheet)
+// ══════════════════════════════════════════════════════════
+function renderWorkersView() {
+    const ws = S.workers;
+    return `
+    <div class="main-header">
+        <div>
+            <div class="main-title">👷 Danh sách thợ</div>
+            <div class="main-meta">${ws.length} thợ · Dùng chung cho tất cả công trình</div>
+        </div>
+        <div class="header-actions">
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;" title="Nhập dữ liệu JSON">
+                📂 Nhập<input type="file" accept=".json" onchange="importData(event)" style="display:none">
+            </label>
+            <button class="btn btn-outline btn-sm" onclick="exportData()" title="Xuất dữ liệu JSON">⬇ Xuất</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('add-worker')">+ Thêm thợ</button>
+        </div>
+    </div>
+    <div class="tab-content">
+        ${!ws.length ? `<div class="card"><div class="empty">
+            <div class="empty-icon">👷</div>
+            <div class="empty-title">Chưa có thợ nào</div>
+            <div class="empty-desc">Thêm thợ vào danh sách chung, sau đó phân công vào từng công trình</div>
+            <button class="btn btn-primary" style="margin-top:14px;" onclick="openModal('add-worker')">+ Thêm thợ đầu tiên</button>
+        </div></div>` : ws.map(w => renderWorkerCard(w)).join('')}
+    </div>`;
+}
+
+function renderWorkerCard(w) {
+    // Count projects this worker is assigned to
+    const projCount = S.projects.filter(p=>(p.workerIds||[]).includes(w.id)).length;
+    const history   = [...(w.wageHistory||[])].sort((a,b)=>b.from.localeCompare(a.from));
+    return `<div class="worker-card">
+        <div class="worker-avatar">${initials(w.name)}</div>
+        <div class="worker-info">
+            <div class="worker-name">${esc(w.name)}</div>
+            <div class="worker-meta">${esc(w.role||'Thợ')}${projCount?` · ${projCount} công trình`:''}</div>
+            <div class="worker-wage">${fmtMoney(w.wage)}/ngày</div>
+            ${history.length>1?`<div class="fs11 c-gray">(${history.length} mức lương)</div>`:''}
+        </div>
+        <div class="worker-actions">
+            <button class="btn btn-warning btn-xs" onclick="openModal('raise-wage','${w.id}')" title="Tăng lương">📈</button>
+            <button class="btn btn-outline btn-xs" onclick="openModal('edit-worker','${w.id}')">✏️</button>
+            <button class="btn btn-ghost btn-xs" onclick="askDeleteWorker('${w.id}')">🗑️</button>
+        </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  SUMMARY VIEW (Tổng lương theo tuần)
+// ══════════════════════════════════════════════════════════
+function renderSummaryView() {
+    const sunday = S.weekStart;
+    const days   = weekDays(sunday);
+    const today  = todayYMD();
+
+    // Build summary data
+    const activeProjs = S.projects.filter(p => p.workerIds && p.workerIds.length);
+    const rows = [];
+    let grandDays = 0, grandAmount = 0;
+
+    S.workers.forEach(w => {
+        const projData = activeProjs
+            .filter(p => (p.workerIds||[]).includes(w.id))
+            .map(p => {
+                const wd = weekDaysWorker(p, w, days);
+                const wa = weekLaborWorker(p, w, days);
+                return { proj: p, days: wd, amount: wa };
+            })
+            .filter(x => x.days > 0);
+
+        if (!projData.length) return;
+        const totalDays   = projData.reduce((s,x)=>s+x.days,0);
+        const totalAmount = projData.reduce((s,x)=>s+x.amount,0);
+        grandDays   += totalDays;
+        grandAmount += totalAmount;
+        rows.push({ w, projData, totalDays, totalAmount });
+    });
+
+    return `
+    <div class="main-header">
+        <div>
+            <div class="main-title">📊 Tổng lương theo tuần</div>
+            <div class="main-meta">Tổng hợp từ tất cả công trình</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline btn-sm" onclick="prevWeek()">‹</button>
+            <button class="btn btn-outline btn-sm" onclick="goToday()">Hôm nay</button>
+            <button class="btn btn-outline btn-sm" onclick="nextWeek()">›</button>
+        </div>
+    </div>
+    <div class="tab-content">
+        <div class="week-nav" style="margin-bottom:14px;">
+            <span class="week-label" style="text-align:left;">
+                Tuần CN ${fmtShort(sunday)} – T7 ${fmtShort(days[6])}, ${sunday.getFullYear()}
+            </span>
+        </div>
+
+        ${!rows.length ? `<div class="card"><div class="empty">
+            <div class="empty-icon">📊</div>
+            <div class="empty-title">Tuần này chưa có dữ liệu</div>
+            <div class="empty-desc">Chấm công các công trình để xem tổng lương ở đây</div>
+        </div></div>` : `
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Tổng thợ làm việc</div><div class="stat-value neutral">${rows.length} thợ</div></div>
+            <div class="stat-card"><div class="stat-label">Tổng ngày công</div><div class="stat-value blue">${grandDays}N</div></div>
+            <div class="stat-card"><div class="stat-label">Tổng lương tuần</div><div class="stat-value negative">${fmtMoney(grandAmount)}</div></div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div class="sum-table-wrap">
+            <table class="sum-table">
+                <thead><tr>
+                    <th class="th-worker">Thợ</th>
+                    <th style="text-align:center;min-width:60px;">Ngày</th>
+                    <th style="text-align:right;min-width:120px;">Tiền tuần</th>
+                </tr></thead>
+                <tbody>
+                ${rows.map(row => `
+                <tr>
+                    <td>
+                        <div class="sum-worker-row">
+                            <div class="sum-worker-name">${esc(row.w.name)}</div>
+                            <div class="fs11 c-gray">${esc(row.w.role||'Thợ')}</div>
+                        </div>
+                        <div class="sum-proj-list">
+                        ${row.projData.map(x=>`
+                            <div class="sum-proj-row">
+                                <span class="c-gray">${esc(x.proj.name)}</span>
+                                <span>${x.days}N · <span class="fw6 c-blue">${fmtMoney(x.amount)}</span></span>
+                            </div>`).join('')}
+                        </div>
+                    </td>
+                    <td style="text-align:center;vertical-align:middle;padding:10px;">
+                        <div class="fw7" style="font-size:14px;">${row.totalDays}N</div>
+                    </td>
+                    <td style="text-align:right;vertical-align:middle;padding:10px;">
+                        <div class="fw7 c-blue" style="font-size:14px;">${fmtMoney(row.totalAmount)}</div>
+                    </td>
+                </tr>`).join('')}
+                </tbody>
+                <tfoot><tr>
+                    <td class="fw7">Tổng cộng</td>
+                    <td class="tc fw7">${grandDays}N</td>
+                    <td class="tr fw7 c-red">${fmtMoney(grandAmount)}</td>
+                </tr></tfoot>
+            </table>
+            </div>
+        </div>`}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  PROJECT VIEW
+// ══════════════════════════════════════════════════════════
+function renderProject(p) {
+    const tabs = [
+        {id:'attendance', label:'📋 Chấm công'},
+        {id:'expenses',   label:'💰 Chi phí'},
+        {id:'advances',   label:'💵 Tạm ứng'},
+        {id:'overview',   label:'📊 Tổng quan'},
+    ];
+    const wCount = (p.workerIds||[]).length;
+    return `
+    <div class="main-header">
+        <div style="min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span class="main-title">${esc(p.name)}</span>
+                <span class="badge badge-${p.status}">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'}</span>
+            </div>
+            <div class="main-meta">
+                Từ ${fmtDate(p.startDate)}${p.endDate?' → '+fmtDate(p.endDate):''}
+                · ${wCount} thợ · OT CN ${p.otRate||1.5}x
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline btn-sm" onclick="exportProjectExcel()" title="Xuất Excel công trình này">📊 Excel</button>
+            <button class="btn btn-outline btn-sm" onclick="openModal('edit-proj')">⚙️</button>
+            ${p.status==='active'
+                ? `<button class="btn btn-danger btn-sm" onclick="askEndProj()">🔴 Kết thúc</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="askDeleteProj()">🗑️</button>`}
+        </div>
+    </div>
+    <div class="tabs-bar">
+        ${tabs.map(t=>`<div class="tab ${S.tab===t.id?'active':''}" onclick="setTab('${t.id}')">${t.label}</div>`).join('')}
+    </div>
+    <div class="tab-content" id="tab-content">
+        ${renderTab(p)}
+    </div>`;
+}
+
+function renderTab(p) {
+    switch(S.tab) {
+        case 'attendance': return renderAttendance(p);
+        case 'expenses':   return renderExpenses(p);
+        case 'advances':   return renderAdvances(p);
+        case 'overview':   return renderOverview(p);
+        default: return '';
+    }
+}
+
+// ── ATTENDANCE ────────────────────────────────────────────
+function renderAttendance(p) {
+    const workers = projWorkers(p);
+
+    if (!S.workers.length) {
+        return `<div class="card"><div class="empty">
+            <div class="empty-icon">👷</div>
+            <div class="empty-title">Chưa có thợ nào</div>
+            <div class="empty-desc">Thêm thợ vào danh sách chung trước</div>
+            <button class="btn btn-primary" style="margin-top:14px;" onclick="selectView('workers')">👷 Thêm thợ</button>
+        </div></div>`;
+    }
+
+    const assignBtn = p.status==='active'
+        ? `<button class="btn btn-purple btn-sm" onclick="openModal('assign-workers')">👷 Phân công thợ</button>`
+        : '';
+
+    if (!workers.length) {
+        return `<div class="card"><div class="empty">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">Chưa phân công thợ</div>
+            <div class="empty-desc">Chọn thợ từ danh sách chung để chấm công</div>
+            <div style="margin-top:14px;">${assignBtn}</div>
+        </div></div>`;
+    }
+
+    const sunday    = S.weekStart;
+    const days      = weekDays(sunday);
+    const today     = todayYMD();
+    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0);
+
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <div class="week-nav" style="margin-bottom:0;flex:1;">
+            <button class="btn btn-outline btn-sm" onclick="prevWeek()">‹</button>
+            <span class="week-label">Tuần ${fmtShort(sunday)} – ${fmtShort(days[6])}, ${sunday.getFullYear()}</span>
+            <button class="btn btn-outline btn-sm" onclick="nextWeek()">›</button>
+            <button class="btn btn-outline btn-sm" onclick="goToday()">Hôm nay</button>
+        </div>
+        ${assignBtn}
+    </div>
+
+    <div class="legend" style="margin-bottom:10px;">
+        <span style="font-weight:600;color:var(--gray-500);">Bấm để chuyển:</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#dcfce7;border-color:#86efac;color:#15803d;">1N</div> Cả ngày</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#fef9c3;border-color:#fde047;color:#854d0e;">½</div> Nửa ngày</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6;">TC</div> Tăng ca (CN)</span>
+    </div>
+
+    <div class="att-table-wrap">
+    <table class="att-table">
+        <thead><tr>
+            <th class="col-name">Thợ</th>
+            ${days.map((d,i) => {
+                const isToday = toYMD(d) === today;
+                const isSun   = i === 0;
+                return `<th class="${isSun?'col-sun':''} ${isToday?'today-col':''}">
+                    ${DN[i]}<div style="font-weight:400;font-size:9px;color:var(--gray-400);">${fmtShort(d)}</div>
+                </th>`;
+            }).join('')}
+            <th>Ngày</th><th>Tiền</th>
+        </tr></thead>
+        <tbody>
+        ${workers.map(w => {
+            const wd = weekDaysWorker(p, w, days);
+            const wp = weekLaborWorker(p, w, days);
+            return `<tr>
+                <td class="col-name">
+                    <div class="fw6" style="font-size:13px;">${esc(w.name)}</div>
+                    <div class="fs11 c-gray">${esc(w.role||'')} · ${fmtMoney(effectiveWage(w,toYMD(days[0])))}/N</div>
+                </td>
+                ${days.map((d,i) => {
+                    const ds    = toYMD(d);
+                    const att   = getAtt(p, w.id, ds);
+                    const isToday = ds === today;
+                    const isSun   = i === 0;
+                    return `<td class="tc ${isToday?'today-cell':''}">
+                        <div class="att-cell ${att}"
+                             onclick="toggleAtt('${p.id}','${w.id}','${ds}',${isSun})"
+                             title="${DFULL[i]}">
+                            ${attLabel(att)}
+                        </div>
+                    </td>`;
+                }).join('')}
+                <td class="tc fw6 fs12" style="color:var(--gray-700);">${wd>0?wd+'N':'-'}</td>
+                <td class="tr fw6 c-blue fs12">${wp>0?fmtMoney(wp):'-'}</td>
+            </tr>`;
+        }).join('')}
+        </tbody>
+        <tfoot><tr>
+            <td class="col-name">Tổng tuần</td>
+            <td colspan="${days.length}"></td>
+            <td></td>
+            <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal)}</td>
+        </tr></tfoot>
+    </table>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+        <div class="card-header">
+            <span class="card-title">💵 Thanh toán công tuần này</span>
+            ${p.status==='active'?`<button class="btn btn-success btn-sm" onclick="openModal('payment','${toYMD(sunday)}')">+ Ghi nhận</button>`:''}
+        </div>
+        ${renderPayments(p, toYMD(sunday), weekTotal)}
+    </div>`;
+}
+
+function renderPayments(p, wStart, weekTotal) {
+    const pays    = (p.payments||[]).filter(x=>x.weekStart===wStart);
+    const paidSum = pays.reduce((s,x)=>s+x.amount,0);
+    const diff    = weekTotal - paidSum;
+
+    if (!pays.length) return `<div style="font-size:13px;color:var(--gray-400);">
+        Tuần này tính được <strong>${fmtMoney(weekTotal)}</strong>. Chưa ghi nhận thanh toán.
+    </div>`;
+
+    return `
+    <div class="info-box ${diff>0?'yellow':'green'}" style="margin-bottom:8px;">
+        Tính được: <strong>${fmtMoney(weekTotal)}</strong> · Đã trả: <strong>${fmtMoney(paidSum)}</strong>
+        ${diff>0?` · Còn: <strong>${fmtMoney(diff)}</strong>`:'&nbsp;✅ Đủ rồi'}
+    </div>
+    ${pays.map(pay=>`<div class="pay-row">
+        <div style="flex:1;">
+            <span class="fw6 c-green">${fmtMoney(pay.amount)}</span>
+            <span class="c-gray fs12"> · ${fmtDate(pay.date)}</span>
+            ${pay.note?`<span class="c-gray fs12"> · ${esc(pay.note)}</span>`:''}
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="deletePayment('${p.id}','${pay.id}')">✕</button>
+    </div>`).join('')}`;
+}
+
+// ── EXPENSES ──────────────────────────────────────────────
+function renderExpenses(p) {
+    const exps = [...(p.expenses||[])].sort((a,b)=>b.date>a.date?1:-1);
+    const mc = materialCost(p), oc = otherCost(p);
+    return `
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Vật liệu</div><div class="stat-value neutral">${fmtMoney(mc)}</div></div>
+        <div class="stat-card"><div class="stat-label">Chi phí khác</div><div class="stat-value neutral">${fmtMoney(oc)}</div></div>
+        <div class="stat-card"><div class="stat-label">Tổng phát sinh</div><div class="stat-value negative">${fmtMoney(mc+oc)}</div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📝 Chi phí vật tư & khác (${exps.length})</span>
+            ${p.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openModal('add-expense')">+ Thêm</button>`:''}
+        </div>
+        ${!exps.length ? `<div class="empty"><div class="empty-icon">📋</div><div class="empty-desc">Chưa có chi phí nào</div></div>` : `
+        <table class="data-table">
+            <thead><tr><th>Ngày</th><th>Loại</th><th>Mô tả</th><th class="tr">Số tiền</th><th style="width:36px;"></th></tr></thead>
+            <tbody>
+            ${exps.map(e=>`<tr>
+                <td class="fs12 c-gray">${fmtDate(e.date)}</td>
+                <td><span class="tag tag-${e.type}">${e.type==='material'?'🧱 Vật liệu':'📦 Khác'}</span></td>
+                <td style="font-size:13px;">${esc(e.desc||'-')}</td>
+                <td class="tr fw6 fs12">${fmtMoney(e.amount)}</td>
+                <td>${p.status==='active'?`<button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')">🗑️</button>`:''}</td>
+            </tr>`).join('')}
+            </tbody>
+            <tfoot><tr>
+                <td colspan="3" class="fw7">Tổng cộng</td>
+                <td class="tr c-red fw7">${fmtMoney(mc+oc)}</td><td></td>
+            </tr></tfoot>
+        </table>`}
+    </div>`;
+}
+
+// ── ADVANCES ──────────────────────────────────────────────
+function renderAdvances(p) {
+    const advs  = [...(p.advances||[])].sort((a,b)=>b.date>a.date?1:-1);
+    const total = totalAdvances(p);
+    const rev   = p.revenue || 0;
+    return `
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Đã nhận tạm ứng</div><div class="stat-value positive">${fmtMoney(total)}</div></div>
+        <div class="stat-card"><div class="stat-label">Giá trị HĐ</div><div class="stat-value blue">${fmtMoney(rev)}</div></div>
+        <div class="stat-card"><div class="stat-label">Còn lại chưa nhận</div><div class="stat-value ${Math.max(0,rev-total)>0?'warning':'neutral'}">${fmtMoney(Math.max(0,rev-total))}</div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">💵 Tạm ứng từ chủ nhà (${advs.length})</span>
+            ${p.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openModal('add-advance')">+ Thêm</button>`:''}
+        </div>
+        ${!advs.length ? `<div class="empty"><div class="empty-icon">💵</div><div class="empty-title">Chưa có tạm ứng</div><div class="empty-desc">Ghi nhận mỗi lần nhận tiền từ chủ nhà</div></div>` : `
+        <table class="data-table">
+            <thead><tr><th>Ngày</th><th>Ghi chú</th><th class="tr">Số tiền</th><th style="width:36px;"></th></tr></thead>
+            <tbody>
+            ${advs.map((a,i)=>`<tr>
+                <td class="fs12 c-gray">${fmtDate(a.date)}</td>
+                <td style="font-size:13px;">${esc(a.note||`Đợt ${advs.length-i}`)}</td>
+                <td class="tr fw6 c-green fs12">${fmtMoney(a.amount)}</td>
+                <td>${p.status==='active'?`<button class="btn btn-ghost btn-xs" onclick="deleteAdvance('${p.id}','${a.id}')">🗑️</button>`:''}</td>
+            </tr>`).join('')}
+            </tbody>
+            <tfoot><tr>
+                <td colspan="2" class="fw7">Tổng đã nhận</td>
+                <td class="tr c-green fw7">${fmtMoney(total)}</td><td></td>
+            </tr></tfoot>
+        </table>`}
+    </div>`;
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────
+function renderOverview(p) {
+    const lc  = laborCost(p), mc = materialCost(p), oc = otherCost(p);
+    const tc  = lc + mc + oc;
+    const adv = totalAdvances(p);
+    const rev = p.revenue || 0;
+    const pft = adv - tc;
+    const paid = totalPaid(p), owed = Math.max(0, lc - paid);
+    const pct  = adv > 0 ? (pft/adv*100).toFixed(1) : null;
+    const workers = projWorkers(p);
+
+    return `
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Giá trị HĐ</div>
+            <div class="stat-value blue">${fmtMoney(rev)}</div>
+            <button class="btn btn-outline btn-xs" style="margin-top:8px;" onclick="openModal('set-revenue')">Cập nhật</button>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Đã nhận tạm ứng</div>
+            <div class="stat-value positive">${fmtMoney(adv)}</div>
+            <div class="fs11 c-gray" style="margin-top:3px;">Còn lại: ${fmtMoney(Math.max(0,rev-adv))}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Tổng chi phí</div>
+            <div class="stat-value negative">${fmtMoney(tc)}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">${pft>=0?'💰 Lợi nhuận':'📉 Thua lỗ'}</div>
+            <div class="stat-value ${pft>=0?'positive':'negative'}">${pft<0?'-':''}${fmtMoney(Math.abs(pft))}</div>
+            ${pct!==null?`<div class="fs11 c-gray" style="margin-top:3px;">${pct}% / tạm ứng</div>`:''}
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <div class="card-header"><span class="card-title">📊 Báo cáo lãi/lỗ</span></div>
+            <table class="pl-table"><tbody>
+                <tr><td style="color:var(--success);font-weight:700;">THU</td><td></td></tr>
+                <tr><td style="padding-left:12px;">Tạm ứng từ chủ nhà</td><td class="c-green">${fmtMoney(adv)}</td></tr>
+                <tr><td style="color:var(--danger);font-weight:700;padding-top:10px;">CHI</td><td></td></tr>
+                <tr><td style="padding-left:12px;">Nhân công</td><td>${fmtMoney(lc)}</td></tr>
+                <tr><td style="padding-left:24px;" class="fs12 c-gray">Đã trả thợ</td><td class="c-green fs12">-${fmtMoney(paid)}</td></tr>
+                <tr><td style="padding-left:24px;" class="fs12 c-gray">Còn nợ thợ</td><td class="${owed>0?'c-orange':'c-green'} fs12">${fmtMoney(owed)}</td></tr>
+                <tr><td style="padding-left:12px;">Vật liệu</td><td>${fmtMoney(mc)}</td></tr>
+                <tr><td style="padding-left:12px;">Chi phí khác</td><td>${fmtMoney(oc)}</td></tr>
+            </tbody>
+            <tfoot><tr>
+                <td class="fw7" style="font-size:15px;">${pft>=0?'💰 Lợi nhuận':'📉 Lỗ'}</td>
+                <td class="${pft>=0?'c-green':'c-red'}" style="font-size:16px;">${pft<0?'-':''}${fmtMoney(Math.abs(pft))}</td>
+            </tr></tfoot></table>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><span class="card-title">👷 Từng thợ</span></div>
+            ${!workers.length ? `<div class="empty" style="padding:16px 0;"><div class="empty-desc">Chưa có thợ</div></div>` : `
+            <table class="data-table">
+                <thead><tr><th>Thợ</th><th class="tc">Ngày</th><th class="tr">Tổng lương</th></tr></thead>
+                <tbody>
+                ${workers.map(w => {
+                    const td=workerTotalDays(p,w), tp=workerLaborCost(p,w);
+                    return `<tr>
+                        <td><div class="fw6 fs12">${esc(w.name)}</div><div class="fs11 c-gray">${esc(w.role||'')}</div></td>
+                        <td class="tc fw6 fs12">${td>0?td+'N':'-'}</td>
+                        <td class="tr fw6 c-blue fs12">${tp>0?fmtMoney(tp):'-'}</td>
+                    </tr>`;
+                }).join('')}
+                </tbody>
+                <tfoot><tr>
+                    <td class="fw7">Tổng</td>
+                    <td class="tc fw7">${workers.reduce((s,w)=>s+workerTotalDays(p,w),0)}N</td>
+                    <td class="tr fw7 c-blue">${fmtMoney(lc)}</td>
+                </tr></tfoot>
+            </table>`}
+        </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════════════════
+function openModal(type, extra) {
+    modalType = type; modalExtra = extra;
+    document.getElementById('modal-content').innerHTML = modalContent();
+    document.getElementById('modal-overlay').style.display = 'flex';
+    const first = document.querySelector('#modal-content input, #modal-content select');
+    if (first) setTimeout(()=>first.focus(), 80);
+    if (type === 'manage-users') loadUsersList();
+}
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    modalType = null; modalExtra = null;
+}
+function overlayClose(e) { if (e.target === e.currentTarget) closeModal(); }
+
+function modalContent() {
+    switch(modalType) {
+        case 'new-proj':       return mNewProj();
+        case 'edit-proj':      return mEditProj();
+        case 'add-worker':     return mAddWorker();
+        case 'edit-worker':    return mEditWorker();
+        case 'raise-wage':     return mRaiseWage();
+        case 'assign-workers': return mAssignWorkers();
+        case 'add-expense':    return mAddExpense();
+        case 'add-advance':    return mAddAdvance();
+        case 'payment':        return mPayment();
+        case 'set-revenue':    return mSetRevenue();
+        case 'confirm':        return mConfirm();
+        case 'firebase-setup': return mFirebaseSetup();
+        case 'sheets-sync':    return mSheetsSync();
+        case 'manage-users':   return mManageUsers();
+        default: return '';
+    }
+}
+
+function $v(id) { return (document.getElementById(id)||{}).value || ''; }
+function $f(id) { return parseFloat($v(id)) || 0; }
+
+// ── Project modals ────────────────────────────────────────
+function mNewProj() {
+    return `<div class="modal-title">🏗️ Thêm công trình mới</div>
+    <div class="form-group">
+        <label class="form-label">Tên công trình *</label>
+        <input class="form-input" id="m-name" placeholder="Vd: Nhà ông Nguyễn Văn A">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ngày bắt đầu</label>
+        <input type="date" class="form-input" id="m-start" value="${todayYMD()}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Giá trị hợp đồng (₫)</label>
+        <input type="number" class="form-input" id="m-revenue" placeholder="0" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Hệ số tăng ca Chủ nhật</label>
+        <select class="form-select" id="m-ot">
+            <option value="1">1x – Tính bằng ngày thường</option>
+            <option value="1.5" selected>1.5x – Tăng 50%</option>
+            <option value="2">2x – Gấp đôi</option>
+        </select>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doNewProj()">✅ Tạo công trình</button>
+    </div>`;
+}
+
+function doNewProj() {
+    const name = $v('m-name').trim();
+    if (!name) { alert('Vui lòng nhập tên công trình'); return; }
+    const p = {
+        id: uid(), name,
+        startDate: $v('m-start'), endDate: null, status: 'active',
+        revenue: $f('m-revenue'), otRate: $f('m-ot') || 1.5,
+        workerIds: [], attendance: [], expenses: [], advances: [], payments: [],
+    };
+    S.projects.push(p);
+    S.view = p.id; S.tab = 'attendance';
+    save(); closeModal(); renderAll();
+}
+
+function mEditProj() {
+    const p = cur();
+    return `<div class="modal-title">⚙️ Cài đặt công trình</div>
+    <div class="form-group">
+        <label class="form-label">Tên công trình *</label>
+        <input class="form-input" id="m-name" value="${esc(p.name)}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ngày bắt đầu</label>
+        <input type="date" class="form-input" id="m-start" value="${p.startDate||''}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Giá trị hợp đồng (₫)</label>
+        <input type="number" class="form-input" id="m-revenue" value="${p.revenue||0}" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Hệ số tăng ca CN</label>
+        <select class="form-select" id="m-ot">
+            <option value="1" ${(p.otRate||1.5)==1?'selected':''}>1x</option>
+            <option value="1.5" ${(p.otRate||1.5)==1.5?'selected':''}>1.5x</option>
+            <option value="2" ${(p.otRate||1.5)==2?'selected':''}>2x</option>
+        </select>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doEditProj()">💾 Lưu</button>
+    </div>`;
+}
+
+function doEditProj() {
+    const p = cur(), name = $v('m-name').trim();
+    if (!name) { alert('Nhập tên công trình'); return; }
+    p.name = name; p.startDate = $v('m-start');
+    p.revenue = $f('m-revenue'); p.otRate = $f('m-ot') || 1.5;
+    save(); closeModal(); renderAll();
+}
+
+// ── Worker modals ─────────────────────────────────────────
+function mAddWorker() {
+    return `<div class="modal-title">👷 Thêm thợ vào danh sách</div>
+    <div class="form-group">
+        <label class="form-label">Họ tên *</label>
+        <input class="form-input" id="m-name" placeholder="Nguyễn Văn An">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Chức vụ / Vai trò</label>
+        <input class="form-input" id="m-role" placeholder="Thợ chính, Thợ phụ, Giám sát...">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Lương mỗi ngày (₫) *</label>
+        <input type="number" class="form-input" id="m-wage" placeholder="300000" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Áp dụng từ ngày</label>
+        <input type="date" class="form-input" id="m-from" value="${todayYMD()}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <input class="form-input" id="m-notes" placeholder="SĐT, thông tin thêm...">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doAddWorker()">+ Thêm</button>
+    </div>`;
+}
+
+function doAddWorker() {
+    const name = $v('m-name').trim(), wage = $f('m-wage');
+    if (!name) { alert('Nhập họ tên thợ'); return; }
+    if (!wage) { alert('Nhập mức lương'); return; }
+    const from = $v('m-from') || todayYMD();
+    S.workers.push({
+        id: uid(), name, role: $v('m-role').trim(), wage, notes: $v('m-notes').trim(),
+        wageHistory: [{ id: uid(), wage, from }],
+    });
+    save(); closeModal(); renderAll();
+}
+
+function mEditWorker() {
+    const w = S.workers.find(x=>x.id===modalExtra);
+    if (!w) return '';
+    const history = [...(w.wageHistory||[])].sort((a,b)=>b.from.localeCompare(a.from));
+    return `<div class="modal-title">✏️ Sửa thông tin thợ</div>
+    <div class="form-group">
+        <label class="form-label">Họ tên *</label>
+        <input class="form-input" id="m-name" value="${esc(w.name)}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Chức vụ</label>
+        <input class="form-input" id="m-role" value="${esc(w.role||'')}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <input class="form-input" id="m-notes" value="${esc(w.notes||'')}">
+    </div>
+    ${history.length ? `
+    <div style="margin-top:14px;border-top:1px solid var(--gray-100);padding-top:14px;">
+        <div class="form-label" style="margin-bottom:8px;">📈 Lịch sử lương</div>
+        ${history.map((h,i)=>`<div class="wage-hist-row">
+            <div style="flex:1;">
+                <span class="fw6">${fmtMoney(h.wage)}</span>
+                <span class="c-gray"> · Từ ${fmtDate(h.from)}</span>
+                ${h.note?`<span class="c-gray"> · ${esc(h.note)}</span>`:''}
+                ${i===0?`<span class="tag tag-current" style="margin-left:4px;">Hiện tại</span>`:''}
+            </div>
+        </div>`).join('')}
+    </div>` : ''}
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doEditWorker('${w.id}')">💾 Lưu</button>
+    </div>`;
+}
+
+function doEditWorker(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    const name = $v('m-name').trim();
+    if (!name) { alert('Nhập họ tên'); return; }
+    w.name = name; w.role = $v('m-role').trim(); w.notes = $v('m-notes').trim();
+    save(); closeModal(); renderAll();
+}
+
+function mRaiseWage() {
+    const w = S.workers.find(x=>x.id===modalExtra);
+    if (!w) return '';
+    return `<div class="modal-title">📈 Tăng lương – ${esc(w.name)}</div>
+    <div class="info-box blue">Lương hiện tại: <strong>${fmtMoney(w.wage)}/ngày</strong></div>
+    <div class="form-group">
+        <label class="form-label">Mức lương mới (₫/ngày) *</label>
+        <input type="number" class="form-input" id="m-wage" value="${w.wage||0}" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Có hiệu lực từ ngày *</label>
+        <input type="date" class="form-input" id="m-from" value="${todayYMD()}">
+        <div class="form-hint">Chấm công từ ngày này sẽ tính lương mới</div>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Lý do (tùy chọn)</label>
+        <input class="form-input" id="m-note" placeholder="Tăng hiệu quả, thỏa thuận mới...">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-success" onclick="doRaiseWage('${w.id}')">✅ Xác nhận tăng lương</button>
+    </div>`;
+}
+
+function doRaiseWage(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    const wage = $f('m-wage'), from = $v('m-from');
+    if (!wage) { alert('Nhập mức lương mới'); return; }
+    if (!from) { alert('Chọn ngày hiệu lực'); return; }
+    if (!w.wageHistory) w.wageHistory = [];
+    w.wageHistory = w.wageHistory.filter(h => h.from !== from);
+    w.wageHistory.push({ id: uid(), wage, from, note: $v('m-note').trim() });
+    w.wage = wage;
+    save(); closeModal(); renderAll();
+}
+
+// ── Assign workers to project ─────────────────────────────
+function mAssignWorkers() {
+    const p = cur();
+    const assigned = p.workerIds || [];
+    return `<div class="modal-title">👷 Phân công thợ – ${esc(p.name)}</div>
+    ${!S.workers.length ? `<div class="info-box yellow">Chưa có thợ nào. <a href="#" onclick="closeModal();selectView('workers');return false;">Thêm thợ trước</a></div>` : `
+    <div class="form-hint" style="margin-bottom:10px;">Chọn thợ tham gia công trình này</div>
+    <div class="check-list">
+        ${S.workers.map(w=>`
+        <label class="check-item">
+            <input type="checkbox" id="wc-${w.id}" ${assigned.includes(w.id)?'checked':''}>
+            <div class="check-item-info">
+                <div class="check-item-name">${esc(w.name)}</div>
+                <div class="check-item-meta">${esc(w.role||'Thợ')} · ${fmtMoney(w.wage)}/ngày</div>
+            </div>
+        </label>`).join('')}
+    </div>`}
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doAssignWorkers()">💾 Lưu phân công</button>
+    </div>`;
+}
+
+function doAssignWorkers() {
+    const p = cur();
+    p.workerIds = S.workers.filter(w => {
+        const el = document.getElementById('wc-' + w.id);
+        return el && el.checked;
+    }).map(w => w.id);
+    save(); closeModal(); renderAll();
+}
+
+// ── Expense / Advance / Payment modals ────────────────────
+function mAddExpense() {
+    return `<div class="modal-title">💰 Thêm chi phí</div>
+    <div class="form-group">
+        <label class="form-label">Ngày</label>
+        <input type="date" class="form-input" id="m-date" value="${todayYMD()}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Loại chi phí</label>
+        <select class="form-select" id="m-type">
+            <option value="material">🧱 Vật liệu / Mua hàng</option>
+            <option value="other">📦 Chi phí khác (xăng, ăn, thiết bị...)</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Mô tả</label>
+        <input class="form-input" id="m-desc" placeholder="Xi măng, sắt, xăng xe...">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Số tiền (₫) *</label>
+        <input type="number" class="form-input" id="m-amount" placeholder="0" min="0" inputmode="numeric">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doAddExpense()">+ Thêm</button>
+    </div>`;
+}
+
+function doAddExpense() {
+    const amount = $f('m-amount');
+    if (!amount) { alert('Nhập số tiền'); return; }
+    if (!cur().expenses) cur().expenses = [];
+    cur().expenses.push({ id:uid(), date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), amount });
+    save(); closeModal(); renderAll();
+}
+
+function mAddAdvance() {
+    return `<div class="modal-title">💵 Tạm ứng từ chủ nhà</div>
+    <div class="form-group">
+        <label class="form-label">Ngày nhận tiền</label>
+        <input type="date" class="form-input" id="m-date" value="${todayYMD()}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Số tiền (₫) *</label>
+        <input type="number" class="form-input" id="m-amount" placeholder="0" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <input class="form-input" id="m-note" placeholder="Đợt 1, chuyển khoản...">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doAddAdvance()">+ Thêm</button>
+    </div>`;
+}
+
+function doAddAdvance() {
+    const amount = $f('m-amount');
+    if (!amount) { alert('Nhập số tiền'); return; }
+    if (!cur().advances) cur().advances = [];
+    cur().advances.push({ id:uid(), date:$v('m-date'), amount, note:$v('m-note').trim() });
+    save(); closeModal(); renderAll();
+}
+
+function mPayment() {
+    const p = cur();
+    const sunday  = new Date(modalExtra + 'T00:00:00');
+    const days    = weekDays(sunday);
+    const workers = projWorkers(p);
+    const suggest = workers.reduce((s,w) => s + weekLaborWorker(p,w,days), 0);
+    return `<div class="modal-title">💵 Thanh toán công thợ</div>
+    <div class="info-box blue">Lương tuần này: <strong>${fmtMoney(suggest)}</strong> (${workers.length} thợ)</div>
+    <div class="form-group">
+        <label class="form-label">Ngày thanh toán</label>
+        <input type="date" class="form-input" id="m-date" value="${todayYMD()}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Số tiền đã trả (₫) *</label>
+        <input type="number" class="form-input" id="m-amount" value="${suggest}" min="0" inputmode="numeric">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <input class="form-input" id="m-note" placeholder="Tiền mặt, chuyển khoản...">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-success" onclick="doPayment()">✅ Ghi nhận</button>
+    </div>`;
+}
+
+function doPayment() {
+    const amount = $f('m-amount');
+    if (!amount) { alert('Nhập số tiền'); return; }
+    if (!cur().payments) cur().payments = [];
+    cur().payments.push({ id:uid(), weekStart:modalExtra, date:$v('m-date'), amount, note:$v('m-note').trim() });
+    save(); closeModal(); renderAll();
+}
+
+function mSetRevenue() {
+    return `<div class="modal-title">💼 Giá trị hợp đồng</div>
+    <div class="form-group">
+        <label class="form-label">Giá trị hợp đồng (₫)</label>
+        <input type="number" class="form-input" id="m-rev" value="${cur().revenue||0}" min="0" inputmode="numeric">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doSetRevenue()">💾 Lưu</button>
+    </div>`;
+}
+
+function doSetRevenue() { cur().revenue = $f('m-rev'); save(); closeModal(); renderAll(); }
+
+function mConfirm() {
+    return `<div class="modal-title">${modalExtra.title||'Xác nhận'}</div>
+    <p style="font-size:14px;color:var(--gray-600);line-height:1.6;">${modalExtra.message||''}</p>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-danger" onclick="execConfirm()">Xác nhận</button>
+    </div>`;
+}
+
+function execConfirm() { const cb=confirmCb; confirmCb=null; closeModal(); if(cb) cb(); }
+
+function mFirebaseSetup() {
+    const cfg = getFBCfg();
+    const connected = !!fbRef;
+    if (cfg) {
+        return `<div class="modal-title">☁️ Đồng bộ đám mây</div>
+        <div style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:12px;">
+            ${connected
+                ? '<span style="color:var(--success);font-weight:600;">● Đang kết nối</span> — dữ liệu đồng bộ theo thời gian thực.'
+                : '<span style="color:var(--danger);font-weight:600;">● Mất kết nối</span> — Firebase chưa phản hồi.'}
+        </div>
+        <div style="background:var(--gray-100);border-radius:8px;padding:10px 12px;font-size:12px;font-family:monospace;color:var(--gray-600);word-break:break-all;margin-bottom:16px;">
+            ${esc(cfg.databaseURL||'(không có databaseURL)')}
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger btn-sm" onclick="doDisconnectFirebase()">🔌 Ngắt kết nối</button>
+            <button class="btn btn-outline" onclick="closeModal()">Đóng</button>
+            ${!connected?`<button class="btn btn-primary" onclick="doFirebaseSetup()">Kết nối lại</button>`:''}
+        </div>`;
+    }
+    return `<div class="modal-title">☁️ Kết nối Firebase</div>
+    <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:14px;">
+        Dán cấu hình Firebase JSON để đồng bộ dữ liệu trên nhiều thiết bị theo thời gian thực.
+    </p>
+    <label class="form-label">Firebase Config (JSON)</label>
+    <textarea id="fb-cfg-input" rows="8" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--gray-200);border-radius:8px;resize:vertical;" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "databaseURL": "https://your-project.firebaseio.com",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+    <p style="font-size:11px;color:var(--gray-400);margin-top:6px;">
+        Vào <strong>console.firebase.google.com</strong> → Dự án → Cài đặt → Ứng dụng web → Sao chép <code>firebaseConfig</code>
+    </p>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doFirebaseSetup()">Kết nối</button>
+    </div>`;
+}
+
+function doFirebaseSetup() {
+    const el = document.getElementById('fb-cfg-input');
+    let cfg;
+    try {
+        const raw = el ? el.value.trim() : null;
+        if (!raw) { alert('Vui lòng dán cấu hình Firebase.'); return; }
+        cfg = JSON.parse(raw);
+        if (!cfg.databaseURL) throw new Error('Thiếu trường databaseURL');
+    } catch(e) { alert('JSON không hợp lệ: ' + e.message); return; }
+    localStorage.setItem(FB_KEY, JSON.stringify(cfg));
+    closeModal();
+    initFirebase(cfg);
+}
+
+function doDisconnectFirebase() {
+    if (!confirm('Ngắt kết nối Firebase? Dữ liệu cục bộ vẫn được giữ.')) return;
+    if (fbRef) { fbRef.off(); fbRef = null; }
+    localStorage.removeItem(FB_KEY);
+    updateCloudBtn(false);
+    closeModal();
+}
+
+// ── Google Sheets sync ────────────────────────────────────
+function getSheetsUrl() { return localStorage.getItem(SHEETS_KEY) || ''; }
+
+function updateSheetsBtn() {
+    const btn = document.getElementById('sheets-btn');
+    if (!btn) return;
+    const url = getSheetsUrl();
+    btn.classList.toggle('configured', !!url);
+    btn.textContent = url ? '📊 Đồng bộ Sheets ✓' : '📊 Đồng bộ Google Sheets';
+}
+
+function mSheetsSync() {
+    const url = getSheetsUrl();
+    if (!url) {
+        return `<div class="modal-title">📊 Kết nối Google Sheets</div>
+        <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:14px;">
+            Dán URL của Google Apps Script Web App để đồng bộ dữ liệu với Google Sheets.
+        </p>
+        <label class="form-label">Apps Script Web App URL</label>
+        <input id="sheets-url-input" type="url" class="form-input"
+            placeholder="https://script.google.com/macros/s/.../exec"
+            value="${esc(url)}">
+        <p style="font-size:11px;color:var(--gray-400);margin-top:6px;">
+            Xem hướng dẫn tạo Apps Script bên dưới ↓
+        </p>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+            <button class="btn btn-primary" onclick="doSavesSheetsUrl()">Lưu & Kết nối</button>
+        </div>`;
+    }
+    return `<div class="modal-title">📊 Đồng bộ Google Sheets</div>
+    <p style="font-size:13px;color:var(--gray-600);margin-bottom:16px;">Chọn chiều đồng bộ:</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+        <button class="btn btn-primary" style="padding:14px;font-size:14px;" onclick="doSyncFromSheets()">
+            📥 Sheets → App
+            <div style="font-size:11px;font-weight:400;margin-top:3px;opacity:0.8;">Tải dữ liệu từ Google Sheets về app (ghi đè dữ liệu app)</div>
+        </button>
+        <button class="btn btn-success" style="padding:14px;font-size:14px;" onclick="doSyncToSheets()">
+            📤 App → Sheets
+            <div style="font-size:11px;font-weight:400;margin-top:3px;opacity:0.8;">Đẩy dữ liệu app lên Google Sheets (ghi đè dữ liệu Sheets)</div>
+        </button>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+        <button class="btn btn-ghost btn-sm" onclick="doRemoveSheetsUrl()" style="color:var(--danger);">🔌 Ngắt kết nối</button>
+        <button class="btn btn-outline" onclick="closeModal()">Đóng</button>
+    </div>`;
+}
+
+function doSavesSheetsUrl() {
+    const url = document.getElementById('sheets-url-input')?.value?.trim();
+    if (!url || !url.startsWith('https://script.google.com')) {
+        alert('URL không hợp lệ. Phải bắt đầu bằng https://script.google.com');
+        return;
+    }
+    localStorage.setItem(SHEETS_KEY, url);
+    updateSheetsBtn();
+    closeModal();
+    openModal('sheets-sync');
+}
+
+function doRemoveSheetsUrl() {
+    if (!confirm('Ngắt kết nối Sheets? Dữ liệu cục bộ vẫn được giữ.')) return;
+    localStorage.removeItem(SHEETS_KEY);
+    updateSheetsBtn();
+    closeModal();
+}
+
+async function doSyncFromSheets() {
+    const url = getSheetsUrl();
+    if (!url) return;
+    closeModal();
+    try {
+        const r = await fetch(url + '?action=get', { redirect: 'follow' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const text = await r.text();
+        const d = JSON.parse(text);
+        if (d.error) throw new Error(d.error);
+        if (!d.workers && !d.projects) throw new Error('Dữ liệu không đúng định dạng');
+        if (!confirm(`Tải về: ${(d.workers||[]).length} thợ, ${(d.projects||[]).length} công trình.\nGhi đè dữ liệu app hiện tại?`)) return;
+        S.workers  = d.workers  || [];
+        S.projects = d.projects || [];
+        save(); renderAll();
+        alert('✅ Đồng bộ thành công từ Google Sheets!');
+    } catch(e) {
+        alert('❌ Lỗi kết nối Sheets:\n' + e.message + '\n\nKiểm tra lại URL Apps Script và đảm bảo đã deploy đúng cách.');
+    }
+}
+
+async function doSyncToSheets() {
+    const url = getSheetsUrl();
+    if (!url) return;
+    if (!confirm('Đẩy toàn bộ dữ liệu app lên Google Sheets?\n(Sẽ ghi đè dữ liệu trên Sheets)')) return;
+    closeModal();
+    try {
+        const body = JSON.stringify({ workers: S.workers, projects: S.projects });
+        // Dùng no-cors để tránh lỗi CORS với Apps Script
+        await fetch(url, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body
+        });
+        alert('✅ Đã gửi dữ liệu lên Google Sheets!');
+    } catch(e) {
+        alert('❌ Lỗi: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  ACTIONS
+// ══════════════════════════════════════════════════════════
+function selectView(v) {
+    S.view = v;
+    if (v !== 'workers' && v !== 'summary') {
+        S.tab = 'attendance';
+        S.weekStart = getSunday(new Date());
+    }
+    closeSidebar(); renderAll();
+}
+
+function setTab(t) { S.tab = t; renderMain(); }
+function prevWeek() { S.weekStart = addDays(S.weekStart, -7); renderMain(); }
+function nextWeek() { S.weekStart = addDays(S.weekStart,  7); renderMain(); }
+function goToday()  { S.weekStart = getSunday(new Date());    renderMain(); }
+
+function toggleAtt(projId, workerId, date, isSun) {
+    const p = S.projects.find(x=>x.id===projId);
+    if (!p || p.status !== 'active') return;
+    setAtt(p, workerId, date, cycleAtt(getAtt(p, workerId, date), isSun));
+    save();
+    const tc = document.getElementById('tab-content');
+    if (tc) tc.innerHTML = renderTab(p);
+}
+
+function deleteExpense(projId, expId) {
+    const p = S.projects.find(x=>x.id===projId);
+    p.expenses = p.expenses.filter(e=>e.id!==expId);
+    save(); renderMain();
+}
+
+function deleteAdvance(projId, advId) {
+    const p = S.projects.find(x=>x.id===projId);
+    p.advances = (p.advances||[]).filter(a=>a.id!==advId);
+    save(); renderMain();
+}
+
+function deletePayment(projId, payId) {
+    const p = S.projects.find(x=>x.id===projId);
+    p.payments = p.payments.filter(x=>x.id!==payId);
+    save(); renderMain();
+}
+
+function askDeleteWorker(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    const inProjects = S.projects.filter(p=>(p.workerIds||[]).includes(wid)).length;
+    confirmCb = () => {
+        S.workers = S.workers.filter(x=>x.id!==wid);
+        S.projects.forEach(p => {
+            p.workerIds  = (p.workerIds||[]).filter(id=>id!==wid);
+            p.attendance = (p.attendance||[]).filter(a=>(a.workerId||a.empId)!==wid);
+        });
+        save(); renderAll();
+    };
+    modalExtra = {
+        title: '🗑️ Xóa thợ',
+        message: `Xóa thợ "<strong>${esc(w?.name||'')}</strong>"? ${inProjects?`Đang tham gia ${inProjects} công trình. `:''}Dữ liệu chấm công sẽ bị xóa.`,
+    };
+    openModal('confirm');
+}
+
+function askEndProj() {
+    const p = cur();
+    confirmCb = () => { p.status='completed'; p.endDate=todayYMD(); save(); renderAll(); };
+    modalExtra = { title:'🔴 Kết thúc công trình', message:`Kết thúc "<strong>${esc(p.name)}</strong>"? Dữ liệu lưu nhưng không chấm công thêm được.` };
+    openModal('confirm');
+}
+
+function askDeleteProj() {
+    const p = cur();
+    confirmCb = () => { S.projects=S.projects.filter(x=>x.id!==p.id); S.view='workers'; save(); renderAll(); };
+    modalExtra = { title:'🗑️ Xóa công trình', message:`Xóa "<strong>${esc(p.name)}</strong>"? Toàn bộ dữ liệu công trình sẽ mất.` };
+    openModal('confirm');
+}
+
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const d = JSON.parse(e.target.result);
+            if (!d.workers && !d.projects) throw new Error('File không đúng định dạng');
+            const hasData = S.workers.length || S.projects.length;
+            if (hasData && !confirm('Nhập sẽ GHI ĐÈ toàn bộ dữ liệu hiện tại. Tiếp tục?')) return;
+            S.workers  = d.workers  || [];
+            S.projects = d.projects || [];
+            S.view = 'workers';
+            save(); renderAll();
+            alert(`✅ Nhập thành công: ${S.workers.length} thợ, ${S.projects.length} công trình`);
+        } catch(err) { alert('Lỗi đọc file: ' + err.message); }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+}
+
+function exportData() {
+    const json = JSON.stringify({ workers: S.workers, projects: S.projects }, null, 2);
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+    a.download = `backup-cong-trinh-${todayYMD()}.json`;
+    a.click();
+}
+
+function exportProjectExcel() {
+    const p = cur();
+    if (!p) return;
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: CHẤM CÔNG ──────────────────────────────────
+    const attRows = [['TUẦN', 'NGÀY', 'TÊN THỢ', 'ĐƠN GIÁ', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'TỔNG NGÀY', 'THÀNH TIỀN']];
+    const DAYS = ['CN','T2','T3','T4','T5','T6','T7'];
+
+    // Gom tất cả các tuần đã chấm công
+    const allDates = new Set();
+    (p.attendance || []).forEach(r => allDates.add(r.date));
+    // Tìm các tuần (Sunday) từ các ngày đã chấm
+    const weeks = new Set();
+    allDates.forEach(d => weeks.add(toYMD(getSunday(new Date(d)))));
+    const sortedWeeks = Array.from(weeks).sort();
+
+    sortedWeeks.forEach((wk, wi) => {
+        const sun = new Date(wk);
+        const weekDates = Array.from({length:7}, (_,i) => toYMD(addDays(sun,i)));
+        const workers = projWorkers(p);
+        workers.forEach(w => {
+            const wage = effectiveWage(w, wk);
+            const vals = weekDates.map(d => {
+                const v = getAtt(p, w.id, d);
+                return v === 1 ? 1 : v === 0.5 ? 0.5 : v === 'TC' ? 'TC' : '';
+            });
+            const numericDays = vals.reduce((s,v) => s + (v==='TC'?1 : (v||0)), 0);
+            const total = numericDays * wage;
+            if (vals.some(v => v !== '')) {
+                attRows.push([wi+1, wk, w.name, wage, ...vals, numericDays, total]);
+            }
+        });
+    });
+    const ws1 = XLSX.utils.aoa_to_sheet(attRows);
+    // Định dạng tiền
+    ws1['!cols'] = [{wch:6},{wch:12},{wch:14},{wch:12},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:10},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Chấm Công');
+
+    // ── Sheet 2: CHI PHÍ ────────────────────────────────────
+    const expRows = [['NGÀY', 'LOẠI', 'NỘI DUNG', 'SỐ TIỀN', 'GHI CHÚ']];
+    (p.expenses || []).forEach(e => {
+        expRows.push([e.date, e.type==='material'?'Vật tư':'Khác', e.desc, e.amount, e.note||'']);
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(expRows);
+    ws2['!cols'] = [{wch:12},{wch:8},{wch:30},{wch:14},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Chi Phí');
+
+    // ── Sheet 3: TẠM ỨNG ────────────────────────────────────
+    const advRows = [['NGÀY', 'SỐ TIỀN', 'GHI CHÚ']];
+    (p.advances || []).forEach(a => {
+        advRows.push([a.date, a.amount, a.note||'']);
+    });
+    const ws3 = XLSX.utils.aoa_to_sheet(advRows);
+    ws3['!cols'] = [{wch:12},{wch:14},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Tạm Ứng');
+
+    // ── Sheet 4: TỔNG QUAN ──────────────────────────────────
+    const lc = laborCost(p), mc = materialCost(p), oc = otherCost(p);
+    const tc = lc + mc + oc;
+    const adv = totalAdvances(p);
+    const ovRows = [
+        ['TỔNG QUAN CÔNG TRÌNH'],
+        [],
+        ['Tên công trình', p.name],
+        ['Trạng thái', p.status==='active'?'Đang thi công':'Hoàn thành'],
+        ['Ngày bắt đầu', p.startDate||''],
+        ['Ngày kết thúc', p.endDate||''],
+        [],
+        ['CHI PHÍ', ''],
+        ['Chi phí nhân công', lc],
+        ['Chi phí vật tư', mc],
+        ['Chi phí khác', oc],
+        ['TỔNG CHI PHÍ', tc],
+        [],
+        ['ĐÃ NHẬN TẠM ỨNG', adv],
+        ['CÒN LẠI / THỪA', adv - tc],
+    ];
+    const ws4 = XLSX.utils.aoa_to_sheet(ovRows);
+    ws4['!cols'] = [{wch:22},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Tổng Quan');
+
+    // Xuất file
+    const fname = `${p.name.replace(/[\/\\:*?"<>|]/g,'_')}-${todayYMD()}.xlsx`;
+    XLSX.writeFile(wb, fname);
+}
+
+// ══════════════════════════════════════════════════════════
+//  SIDEBAR (mobile)
+// ══════════════════════════════════════════════════════════
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+    if (e.key==='Escape' && document.getElementById('modal-overlay').style.display!=='none') closeModal();
+});
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+load();
+// renderAll() sẽ được gọi sau khi đăng nhập thành công qua showApp()
+</script>
+</body>
+</html>
