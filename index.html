@@ -246,20 +246,20 @@
 
         /* ===== ATTENDANCE TABLE ===== */
         .att-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--gray-200); -webkit-overflow-scrolling: touch; }
-        .att-table { width: 100%; border-collapse: collapse; background: white; min-width: 680px; }
-        .att-table th { background: var(--gray-50); padding: 8px 6px; font-size: 11px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); white-space: nowrap; }
-        .att-table th.col-name { text-align: left; min-width: 140px; padding-left: 12px; }
+        .att-table { width: 100%; border-collapse: collapse; background: white; min-width: 560px; }
+        .att-table th { background: var(--gray-50); padding: 5px 3px; font-size: 10px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); white-space: nowrap; }
+        .att-table th.col-name { text-align: left; min-width: 120px; padding-left: 10px; }
         .att-table th.col-sun  { color: var(--purple); background: var(--purple-light); }
         .att-table th.today-col { background: #eff6ff; }
-        .att-table td { padding: 6px 6px; text-align: center; border-bottom: 1px solid var(--gray-100); font-size: 13px; }
+        .att-table td { padding: 4px 3px; text-align: center; border-bottom: 1px solid var(--gray-100); font-size: 12px; }
         .att-table td.col-name { text-align: left; padding-left: 12px; }
         .att-table tbody tr:last-child td { border-bottom: none; }
         .att-table td.today-cell { background: #f8faff; }
         .att-cell {
-            width: 36px; height: 34px; border-radius: 7px; cursor: pointer;
+            width: 28px; height: 26px; border-radius: 5px; cursor: pointer;
             border: 1.5px solid var(--gray-200); background: white;
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 10px; font-weight: 700; transition: all 0.12s;
+            font-size: 8px; font-weight: 700; transition: all 0.12s;
             user-select: none; touch-action: manipulation;
         }
         .att-cell:active { transform: scale(0.9); }
@@ -930,7 +930,7 @@ function laborCost(p) {
             if (hasNightOT(a.type)) t += wage * (p.nightOtRate||1);
         });
     });
-    t += (p.dailyExtras||[]).reduce((s,e) => s + (e.amount||0), 0);
+    t += (p.extraWorkerDays||[]).reduce((s,e) => s + (e.amount||0), 0);
     t += (p.workerSupport||[]).reduce((s,x) => s + (x.amount||0), 0);
     return t;
 }
@@ -980,18 +980,14 @@ function setWorkerSupport(p, workerId, weekStart, amount) {
     else p.workerSupport.push({ id: uid(), workerId, weekStart, amount });
 }
 
-function getDailyExtra(p, date) {
-    return ((p.dailyExtras||[]).find(e => e.date === date)||{}).amount || 0;
-}
-function setDailyExtra(p, date, amount) {
-    if (!p.dailyExtras) p.dailyExtras = [];
-    const i = p.dailyExtras.findIndex(e => e.date === date);
-    if (!amount || amount <= 0) { if (i >= 0) p.dailyExtras.splice(i, 1); }
-    else if (i >= 0) p.dailyExtras[i].amount = amount;
-    else p.dailyExtras.push({ id: uid(), date, amount });
+function getExtraWorkersDay(p, date) {
+    return (p.extraWorkerDays||[]).filter(e => e.date === date);
 }
 function weekDailyExtras(p, days) {
-    return days.reduce((s,d) => s + getDailyExtra(p, toYMD(d)), 0);
+    return days.reduce((s,d) => {
+        const ds = toYMD(d);
+        return s + getExtraWorkersDay(p, ds).reduce((ss,e)=>ss+(e.amount||0),0);
+    }, 0);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1363,19 +1359,22 @@ function renderAttendance(p) {
         ${p.status==='active'?`<tr style="background:var(--warning-light);">
             <td class="col-name">
                 <div class="fw6" style="font-size:13px;color:var(--warning);">+ Thêm thợ</div>
-                <div class="fs11 c-gray">Bấm ô để nhập tiền</div>
+                <div class="fs11 c-gray">Bấm ô để chọn thợ</div>
             </td>
             ${days.map(d => {
-                const ds  = toYMD(d);
-                const amt = getDailyExtra(p, ds);
+                const ds = toYMD(d);
+                const extras = getExtraWorkersDay(p, ds);
                 const isToday = ds === today;
                 return `<td class="tc ${isToday?'today-cell':''}" style="padding:4px 2px;">
-                    <div onclick="editDailyExtra('${p.id}','${ds}')"
-                         style="min-width:34px;min-height:30px;border-radius:7px;border:1.5px dashed ${amt?'var(--warning)':'var(--gray-200)'};
-                                background:${amt?'#fef3c7':'white'};color:${amt?'var(--warning)':'var(--gray-300)'};
-                                display:inline-flex;align-items:center;justify-content:center;
-                                font-size:9px;font-weight:700;cursor:pointer;transition:all 0.12s;user-select:none;">
-                        ${amt?fmtMoney(amt):''}
+                    <div onclick="openModal('extra-worker-day','${p.id}|${ds}')"
+                         style="min-width:34px;min-height:30px;border-radius:7px;
+                                border:1.5px dashed ${extras.length?'var(--warning)':'var(--gray-200)'};
+                                background:${extras.length?'#fef3c7':'white'};
+                                display:inline-flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:2px;
+                                cursor:pointer;transition:all 0.12s;padding:2px;user-select:none;">
+                        ${extras.length
+                            ? extras.map(e=>{ const w=worker(e.workerId); return `<span style="font-size:8px;font-weight:700;color:var(--warning);line-height:1;">${w?initials(w.name):'?'}</span>`; }).join('')
+                            : `<span style="color:var(--gray-300);font-size:14px;line-height:1;">+</span>`}
                     </div>
                 </td>`;
             }).join('')}
@@ -1605,6 +1604,7 @@ function modalContent() {
         case 'payment':        return mPayment();
         case 'set-revenue':    return mSetRevenue();
         case 'confirm':        return mConfirm();
+        case 'extra-worker-day': return mExtraWorkerDay();
         case 'firebase-setup': return mFirebaseSetup();
         case 'sheets-sync':    return mSheetsSync();
         case 'manage-users':   return mManageUsers();
@@ -1984,6 +1984,40 @@ function mConfirm() {
 
 function execConfirm() { const cb=confirmCb; confirmCb=null; closeModal(); if(cb) cb(); }
 
+function mExtraWorkerDay() {
+    const [projId, date] = (modalExtra||'').split('|');
+    const p = proj(projId);
+    if (!p) return '';
+    const existing = getExtraWorkersDay(p, date);
+    const existingIds = new Set(existing.map(e => e.workerId));
+    const remaining = S.workers.filter(w => !(p.workerIds||[]).includes(w.id));
+    return `<div class="modal-title">👷 Thêm thợ – ${date}</div>
+    ${remaining.length === 0
+        ? `<p style="color:var(--gray-500);text-align:center;padding:16px 0;">Tất cả thợ đã phân công vào công trình.</p>`
+        : `<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;">
+        ${remaining.map(w => {
+            const added = existingIds.has(w.id);
+            const wage = effectiveWage(w, date);
+            return `<div style="display:flex;align-items:center;justify-content:space-between;
+                                padding:10px 12px;border-radius:10px;
+                                border:1.5px solid ${added?'var(--success)':'var(--gray-200)'};
+                                background:${added?'var(--success-light)':'white'};">
+                <div>
+                    <div style="font-weight:600;font-size:14px;">${esc(w.name)}</div>
+                    <div style="font-size:12px;color:var(--gray-400);">${fmtMoney(wage)}/ngày</div>
+                </div>
+                <button class="btn btn-sm ${added?'btn-danger':'btn-success'}"
+                        onclick="toggleExtraWorkerDay('${projId}','${date}','${w.id}')">
+                    ${added ? '✕ Bỏ' : '+ Thêm'}
+                </button>
+            </div>`;
+        }).join('')}
+        </div>`}
+    <div class="modal-footer" style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="closeModal()">Xong</button>
+    </div>`;
+}
+
 function mFirebaseSetup() {
     const cfg = getFBCfg();
     const connected = !!fbRef;
@@ -2172,6 +2206,21 @@ function setTab(t) { S.tab = t; renderMain(); }
 function prevWeek() { S.weekStart = addDays(S.weekStart, -7); renderMain(); }
 function nextWeek() { S.weekStart = addDays(S.weekStart,  7); renderMain(); }
 function goToday()  { S.weekStart = getSunday(new Date());    renderMain(); }
+
+function toggleExtraWorkerDay(projId, date, workerId) {
+    const p = proj(projId);
+    if (!p) return;
+    if (!p.extraWorkerDays) p.extraWorkerDays = [];
+    const i = p.extraWorkerDays.findIndex(e => e.date === date && e.workerId === workerId);
+    if (i >= 0) { p.extraWorkerDays.splice(i, 1); }
+    else {
+        const w = worker(workerId);
+        p.extraWorkerDays.push({ id: uid(), date, workerId, amount: effectiveWage(w, date) });
+    }
+    save();
+    document.getElementById('modal-content').innerHTML = modalContent();
+    renderMain();
+}
 
 function editWorkerSupport(projId, workerId, weekStart) {
     const p = proj(projId);
