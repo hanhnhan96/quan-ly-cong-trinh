@@ -1493,18 +1493,19 @@ function renderExpenses(p) {
         </div>
         ${!exps.length ? `<div class="empty"><div class="empty-icon">📋</div><div class="empty-desc">Chưa có chi phí nào</div></div>` : `
         <table class="data-table">
-            <thead><tr><th>Ngày</th><th>Loại</th><th>Mô tả</th><th class="tr">Số tiền</th><th style="width:36px;"></th></tr></thead>
+            <thead><tr><th>Ngày</th><th>Loại</th><th>Mô tả</th><th>Người chi</th><th class="tr">Số tiền</th><th style="width:36px;"></th></tr></thead>
             <tbody>
             ${exps.map(e=>`<tr>
                 <td class="fs12 c-gray">${fmtDate(e.date)}</td>
                 <td><span class="tag tag-${e.type}">${e.type==='material'?'🧱 Vật liệu':'📦 Khác'}</span></td>
                 <td style="font-size:13px;">${esc(e.desc||'-')}</td>
+                <td class="fs12" style="color:var(--gray-600);">${esc(e.payer||'-')}</td>
                 <td class="tr fw6 fs12">${fmtMoney(e.amount)}</td>
                 <td>${p.status==='active'?`<button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')">🗑️</button>`:''}</td>
             </tr>`).join('')}
             </tbody>
             <tfoot><tr>
-                <td colspan="3" class="fw7">Tổng cộng</td>
+                <td colspan="4" class="fw7">Tổng cộng</td>
                 <td class="tr c-red fw7">${fmtMoney(mc+oc)}</td><td></td>
             </tr></tfoot>
         </table>`}
@@ -1930,6 +1931,10 @@ function mAddExpense() {
         <input class="form-input" id="m-desc" placeholder="Xi măng, sắt, xăng xe...">
     </div>
     <div class="form-group">
+        <label class="form-label">Người chi</label>
+        <input class="form-input" id="m-payer" placeholder="Nguyên, Văn, chủ nhà...">
+    </div>
+    <div class="form-group">
         <label class="form-label">Số tiền (₫) *</label>
         <input type="number" class="form-input" id="m-amount" placeholder="0" min="0" inputmode="numeric">
     </div>
@@ -1943,7 +1948,7 @@ function doAddExpense() {
     const amount = $f('m-amount');
     if (!amount) { alert('Nhập số tiền'); return; }
     if (!cur().expenses) cur().expenses = [];
-    cur().expenses.push({ id:uid(), date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), amount });
+    cur().expenses.push({ id:uid(), date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), payer:$v('m-payer').trim(), amount });
     save(); closeModal(); renderAll();
 }
 
