@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Quản Lý Công Trình</title>
+    <title>Khánh Duy – Quản Lý Công Trình</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -58,11 +58,11 @@
         }
         .login-field input:focus { border-color: var(--primary); }
         .login-btn {
-            width: 100%; padding: 13px; background: var(--primary); color: white;
+            width: 100%; padding: 13px; background: #c9a227; color: white;
             border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
             cursor: pointer; transition: background 0.15s; margin-top: 4px;
         }
-        .login-btn:hover { background: #1d4ed8; }
+        .login-btn:hover { background: #a8841e; }
         .login-err { color: var(--danger); font-size: 13px; text-align: center; margin-top: 10px; min-height: 18px; }
         #login-screen.hidden { display: none; }
 
@@ -446,9 +446,15 @@
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
     <div class="login-box">
-        <div class="login-logo">🏗️</div>
-        <div class="login-title">Quản Lý Công Trình</div>
-        <div class="login-sub">Đăng nhập để tiếp tục</div>
+        <div class="login-logo" style="margin-bottom:12px;">
+            <div style="display:inline-flex;align-items:center;justify-content:center;
+                        width:72px;height:72px;border-radius:16px;
+                        background:#c9a227;color:white;font-size:28px;font-weight:900;letter-spacing:-1px;">
+                KD
+            </div>
+        </div>
+        <div class="login-title" style="font-size:13px;font-weight:600;color:var(--gray-400);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px;">Công ty Xây dựng</div>
+        <div style="text-align:center;font-size:24px;font-weight:900;color:var(--gray-900);margin-bottom:20px;letter-spacing:-0.5px;">KHÁNH DUY</div>
         <div class="login-field">
             <label>Tên đăng nhập</label>
             <input type="text" id="login-user" placeholder="Nhập tên đăng nhập" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
@@ -477,9 +483,15 @@
     <!-- SIDEBAR -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">🏗️</div>
-            <div class="sidebar-title">Quản Lý Công Trình</div>
-            <div class="sidebar-sub">Chấm công & Chi phí</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:36px;height:36px;border-radius:8px;background:#c9a227;
+                            display:flex;align-items:center;justify-content:center;
+                            color:white;font-size:14px;font-weight:900;flex-shrink:0;">KD</div>
+                <div>
+                    <div class="sidebar-title">KHÁNH DUY</div>
+                    <div class="sidebar-sub">Công ty Xây dựng</div>
+                </div>
+            </div>
         </div>
 
         <!-- Global views -->
