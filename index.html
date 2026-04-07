@@ -263,10 +263,12 @@
             user-select: none; touch-action: manipulation;
         }
         .att-cell:active { transform: scale(0.9); }
-        .att-cell.full     { background: #dcfce7; border-color: #86efac; color: #15803d; }
-        .att-cell.half     { background: #fef9c3; border-color: #fde047; color: #854d0e; }
-        .att-cell.overtime { background: var(--purple-light); border-color: #c4b5fd; color: #5b21b6; }
-        .att-cell.absent   { background: white; border-color: var(--gray-200); color: var(--gray-300); }
+        .att-cell.full       { background: #dcfce7; border-color: #86efac; color: #15803d; }
+        .att-cell.half       { background: #fef9c3; border-color: #fde047; color: #854d0e; }
+        .att-cell.overtime   { background: var(--purple-light); border-color: #c4b5fd; color: #5b21b6; }
+        .att-cell.full_night { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; font-size: 9px; }
+        .att-cell.half_night { background: #e0f2fe; border-color: #38bdf8; color: #0369a1; font-size: 9px; }
+        .att-cell.absent     { background: white; border-color: var(--gray-200); color: var(--gray-300); }
         .att-table tfoot tr td { background: var(--gray-50); font-weight: 700; border-top: 2px solid var(--gray-200); border-bottom: none; font-size: 12px; padding: 9px 6px; }
 
         /* ===== WEEK NAV ===== */
@@ -845,12 +847,13 @@ function weekDays(sun) { return Array.from({length:7}, (_,i) => addDays(sun, i))
 const DN    = ['CN','T2','T3','T4','T5','T6','T7'];
 const DFULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
 
-function attVal(t)   { return t==='full'?1 : t==='half'?0.5 : t==='overtime'?1 : 0; }
-function attLabel(t) { return t==='full'?'1N' : t==='half'?'½N' : t==='overtime'?'TC' : ''; }
+function attVal(t)   { return t==='full'||t==='full_night'?1 : t==='half'||t==='half_night'?0.5 : t==='overtime'?1 : 0; }
+function attLabel(t) { return t==='full'?'1N' : t==='half'?'½N' : t==='overtime'?'TC' : t==='full_night'?'1N+Đ' : t==='half_night'?'½N+Đ' : ''; }
+function hasNightOT(t) { return t==='full_night' || t==='half_night'; }
 
 // Sunday = index 0 → overtime cycle
 function cycleAtt(cur, isSun) {
-    const c = isSun ? ['absent','overtime','full','half'] : ['absent','full','half'];
+    const c = isSun ? ['absent','overtime','full','half','full_night','half_night'] : ['absent','full','half','full_night','half_night'];
     return c[(c.indexOf(cur)+1) % c.length];
 }
 
@@ -913,6 +916,7 @@ function laborCost(p) {
             const wage = effectiveWage(w, a.date);
             const r = a.type === 'overtime' ? wage * (p.otRate||1.5) : wage;
             t += attVal(a.type) * r;
+            if (hasNightOT(a.type)) t += wage * (p.nightOtRate||0.5);
         });
     });
     return t;
@@ -928,7 +932,7 @@ function workerLaborCost(p, w) {
     return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
         const wage = effectiveWage(w, a.date);
         const r = a.type==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(a.type)*r;
+        return s + attVal(a.type)*r + (hasNightOT(a.type) ? wage*(p.nightOtRate||0.5) : 0);
     }, 0);
 }
 
@@ -942,7 +946,7 @@ function weekLaborWorker(p, w, days) {
         const att = getAtt(p, w.id, ds);
         const wage = effectiveWage(w, ds);
         const r   = att==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(att)*r;
+        return s + attVal(att)*r + (hasNightOT(att) ? wage*(p.nightOtRate||0.5) : 0);
     }, 0);
 }
 
@@ -1561,6 +1565,13 @@ function mNewProj() {
             <option value="2">2x – Gấp đôi</option>
         </select>
     </div>
+    <div class="form-group">
+        <label class="form-label">Tăng ca tối (cộng thêm / ngày)</label>
+        <select class="form-select" id="m-night-ot">
+            <option value="0.5" selected>0.5N – Nửa ngày công thêm</option>
+            <option value="1">1N – Một ngày công thêm</option>
+        </select>
+    </div>
     <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
         <button class="btn btn-primary" onclick="doNewProj()">✅ Tạo công trình</button>
@@ -1573,7 +1584,7 @@ function doNewProj() {
     const p = {
         id: uid(), name,
         startDate: $v('m-start'), endDate: null, status: 'active',
-        revenue: $f('m-revenue'), otRate: $f('m-ot') || 1.5,
+        revenue: $f('m-revenue'), otRate: $f('m-ot') || 1.5, nightOtRate: $f('m-night-ot') || 0.5,
         workerIds: [], attendance: [], expenses: [], advances: [], payments: [],
     };
     S.projects.push(p);
@@ -1604,6 +1615,13 @@ function mEditProj() {
             <option value="2" ${(p.otRate||1.5)==2?'selected':''}>2x</option>
         </select>
     </div>
+    <div class="form-group">
+        <label class="form-label">Tăng ca tối (cộng thêm / ngày)</label>
+        <select class="form-select" id="m-night-ot">
+            <option value="0.5" ${(p.nightOtRate||0.5)==0.5?'selected':''}>0.5N – Nửa ngày công thêm</option>
+            <option value="1" ${(p.nightOtRate||0.5)==1?'selected':''}>1N – Một ngày công thêm</option>
+        </select>
+    </div>
     <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
         <button class="btn btn-primary" onclick="doEditProj()">💾 Lưu</button>
@@ -1614,7 +1632,7 @@ function doEditProj() {
     const p = cur(), name = $v('m-name').trim();
     if (!name) { alert('Nhập tên công trình'); return; }
     p.name = name; p.startDate = $v('m-start');
-    p.revenue = $f('m-revenue'); p.otRate = $f('m-ot') || 1.5;
+    p.revenue = $f('m-revenue'); p.otRate = $f('m-ot') || 1.5; p.nightOtRate = $f('m-night-ot') || 0.5;
     save(); closeModal(); renderAll();
 }
 
