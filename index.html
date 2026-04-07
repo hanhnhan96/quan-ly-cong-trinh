@@ -989,6 +989,38 @@ function weekDailyExtras(p, days) {
         return s + getExtraWorkersDay(p, ds).reduce((ss,e)=>ss+(e.amount||0),0);
     }, 0);
 }
+function getWeeklyExtraWorkers(p, weekStart) {
+    return (p.weeklyExtraWorkers||[]).filter(e => e.weekStart === weekStart);
+}
+function addWeeklyExtraWorker(projId, weekStart, workerId) {
+    const p = proj(projId);
+    if (!p) return;
+    if (!p.weeklyExtraWorkers) p.weeklyExtraWorkers = [];
+    if (!p.weeklyExtraWorkers.find(e => e.weekStart===weekStart && e.workerId===workerId))
+        p.weeklyExtraWorkers.push({ id: uid(), weekStart, workerId });
+    save();
+    document.getElementById('modal-content').innerHTML = modalContent();
+    renderMain();
+}
+function removeWeeklyExtraWorker(projId, workerId, weekStart) {
+    const p = proj(projId);
+    if (!p) return;
+    p.weeklyExtraWorkers = (p.weeklyExtraWorkers||[]).filter(e => !(e.weekStart===weekStart && e.workerId===workerId));
+    save(); renderAll();
+}
+function weekExtraCost(p, workerId, days) {
+    return days.reduce((s,d) => {
+        const ds = toYMD(d);
+        const e = (p.extraWorkerDays||[]).find(x => x.date===ds && x.workerId===workerId);
+        return s + (e ? e.amount||0 : 0);
+    }, 0);
+}
+function weekExtraDays(p, workerId, days) {
+    return days.reduce((s,d) => {
+        const ds = toYMD(d);
+        return s + ((p.extraWorkerDays||[]).find(x => x.date===ds && x.workerId===workerId) ? 1 : 0);
+    }, 0);
+}
 
 // ══════════════════════════════════════════════════════════
 //  RENDER
@@ -1356,31 +1388,49 @@ function renderAttendance(p) {
                 </div>`:'-'}</td>
             </tr>`;
         }).join('')}
+        ${getWeeklyExtraWorkers(p, sunStr).map(({workerId: ewId}) => {
+            const ew = worker(ewId);
+            if (!ew) return '';
+            const wd = weekExtraDays(p, ewId, days);
+            const wc = weekExtraCost(p, ewId, days);
+            const sup = getWorkerSupport(p, ewId, sunStr);
+            return `<tr style="background:#fffbeb;">
+                <td class="col-name" style="position:relative;">
+                    <div class="fw6" style="font-size:13px;color:var(--warning);">${esc(ew.name)}</div>
+                    <div class="fs11 c-gray">${fmtMoney(effectiveWage(ew,sunStr))}/N · ngoài</div>
+                    ${p.status==='active'?`<button onclick="removeWeeklyExtraWorker('${p.id}','${ewId}','${sunStr}')"
+                        style="position:absolute;top:4px;right:6px;background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:16px;line-height:1;">×</button>`:''}
+                </td>
+                ${days.map((d,i) => {
+                    const ds = toYMD(d);
+                    const entry = (p.extraWorkerDays||[]).find(e => e.date===ds && e.workerId===ewId);
+                    const isToday = ds === today;
+                    return `<td class="tc ${isToday?'today-cell':''}">
+                        <div class="att-cell ${entry?'full':'absent'}"
+                             onclick="toggleExtraWorkerDay('${p.id}','${ds}','${ewId}')"
+                             style="${entry?'':'opacity:0.35;}">
+                            ${entry?'1N':''}
+                        </div>
+                    </td>`;
+                }).join('')}
+                <td class="tc fw6 fs12" style="color:var(--gray-700);">${wd>0?wd+'N':'-'}</td>
+                <td class="tr fw6 c-blue fs12">${(wc+sup)>0?fmtMoney(wc+sup):'-'}</td>
+                <td class="tr fs12">${p.status==='active'?`<div onclick="editWorkerSupport('${p.id}','${ewId}','${sunStr}')"
+                     style="cursor:pointer;padding:2px 4px;border-radius:6px;min-width:40px;text-align:right;
+                            ${sup?'color:var(--warning);font-weight:700;':'color:var(--gray-300);'}">
+                     ${sup?fmtMoney(sup):'+'}
+                </div>`:'-'}</td>
+            </tr>`;
+        }).join('')}
         ${p.status==='active'?`<tr style="background:var(--warning-light);">
-            <td class="col-name">
-                <div class="fw6" style="font-size:13px;color:var(--warning);">+ Thêm thợ</div>
-                <div class="fs11 c-gray">Bấm ô để chọn thợ</div>
+            <td colspan="${days.length+3}" style="padding:6px 10px;">
+                <button onclick="openModal('add-weekly-extra','${p.id}|${sunStr}')"
+                        style="background:none;border:1.5px dashed var(--warning);border-radius:8px;
+                               color:var(--warning);font-size:12px;font-weight:700;cursor:pointer;
+                               padding:5px 14px;transition:all 0.15s;">
+                    👷 + Thêm thợ ngoài
+                </button>
             </td>
-            ${days.map(d => {
-                const ds = toYMD(d);
-                const extras = getExtraWorkersDay(p, ds);
-                const isToday = ds === today;
-                return `<td class="tc ${isToday?'today-cell':''}" style="padding:4px 2px;">
-                    <div onclick="openModal('extra-worker-day','${p.id}|${ds}')"
-                         style="min-width:34px;min-height:30px;border-radius:7px;
-                                border:1.5px dashed ${extras.length?'var(--warning)':'var(--gray-200)'};
-                                background:${extras.length?'#fef3c7':'white'};
-                                display:inline-flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:2px;
-                                cursor:pointer;transition:all 0.12s;padding:2px;user-select:none;">
-                        ${extras.length
-                            ? extras.map(e=>{ const w=worker(e.workerId); return `<span style="font-size:8px;font-weight:700;color:var(--warning);line-height:1;">${w?initials(w.name):'?'}</span>`; }).join('')
-                            : `<span style="color:var(--gray-300);font-size:14px;line-height:1;">+</span>`}
-                    </div>
-                </td>`;
-            }).join('')}
-            <td></td>
-            <td class="tr fw6 fs12" style="color:var(--warning);">${extraTotal>0?fmtMoney(extraTotal):'-'}</td>
-            <td></td>
         </tr>`:''}
         </tbody>
         <tfoot><tr>
@@ -1604,7 +1654,7 @@ function modalContent() {
         case 'payment':        return mPayment();
         case 'set-revenue':    return mSetRevenue();
         case 'confirm':        return mConfirm();
-        case 'extra-worker-day': return mExtraWorkerDay();
+        case 'add-weekly-extra': return mAddWeeklyExtra();
         case 'firebase-setup': return mFirebaseSetup();
         case 'sheets-sync':    return mSheetsSync();
         case 'manage-users':   return mManageUsers();
@@ -1984,37 +2034,33 @@ function mConfirm() {
 
 function execConfirm() { const cb=confirmCb; confirmCb=null; closeModal(); if(cb) cb(); }
 
-function mExtraWorkerDay() {
-    const [projId, date] = (modalExtra||'').split('|');
+function mAddWeeklyExtra() {
+    const [projId, weekStart] = (modalExtra||'').split('|');
     const p = proj(projId);
     if (!p) return '';
-    const existing = getExtraWorkersDay(p, date);
-    const existingIds = new Set(existing.map(e => e.workerId));
-    const remaining = S.workers.filter(w => !(p.workerIds||[]).includes(w.id));
-    return `<div class="modal-title">👷 Thêm thợ – ${date}</div>
-    ${remaining.length === 0
-        ? `<p style="color:var(--gray-500);text-align:center;padding:16px 0;">Tất cả thợ đã phân công vào công trình.</p>`
+    const existingIds = new Set(getWeeklyExtraWorkers(p, weekStart).map(e => e.workerId));
+    const available = S.workers.filter(w => !(p.workerIds||[]).includes(w.id) && !existingIds.has(w.id));
+    return `<div class="modal-title">👷 Thêm thợ ngoài – tuần ${weekStart}</div>
+    ${available.length === 0
+        ? `<p style="color:var(--gray-500);text-align:center;padding:16px 0;">Không còn thợ trong danh sách.</p>`
         : `<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;">
-        ${remaining.map(w => {
-            const added = existingIds.has(w.id);
-            const wage = effectiveWage(w, date);
+        ${available.map(w => {
+            const wage = effectiveWage(w, weekStart);
             return `<div style="display:flex;align-items:center;justify-content:space-between;
-                                padding:10px 12px;border-radius:10px;
-                                border:1.5px solid ${added?'var(--success)':'var(--gray-200)'};
-                                background:${added?'var(--success-light)':'white'};">
+                                padding:10px 12px;border-radius:10px;border:1.5px solid var(--gray-200);background:white;">
                 <div>
                     <div style="font-weight:600;font-size:14px;">${esc(w.name)}</div>
                     <div style="font-size:12px;color:var(--gray-400);">${fmtMoney(wage)}/ngày</div>
                 </div>
-                <button class="btn btn-sm ${added?'btn-danger':'btn-success'}"
-                        onclick="toggleExtraWorkerDay('${projId}','${date}','${w.id}')">
-                    ${added ? '✕ Bỏ' : '+ Thêm'}
+                <button class="btn btn-success btn-sm"
+                        onclick="addWeeklyExtraWorker('${projId}','${weekStart}','${w.id}')">
+                    + Thêm
                 </button>
             </div>`;
         }).join('')}
         </div>`}
     <div class="modal-footer" style="margin-top:16px;">
-        <button class="btn btn-primary" onclick="closeModal()">Xong</button>
+        <button class="btn btn-outline" onclick="closeModal()">Đóng</button>
     </div>`;
 }
 
