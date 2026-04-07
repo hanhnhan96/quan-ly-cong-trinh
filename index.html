@@ -916,9 +916,10 @@ function laborCost(p) {
             const wage = effectiveWage(w, a.date);
             const r = a.type === 'overtime' ? wage * (p.otRate||1.5) : wage;
             t += attVal(a.type) * r;
-            if (hasNightOT(a.type)) t += wage * (p.nightOtRate||0.5);
+            if (hasNightOT(a.type)) t += wage * (p.nightOtRate||1);
         });
     });
+    t += (p.dailyExtras||[]).reduce((s,e) => s + (e.amount||0), 0);
     return t;
 }
 
@@ -932,7 +933,7 @@ function workerLaborCost(p, w) {
     return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
         const wage = effectiveWage(w, a.date);
         const r = a.type==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(a.type)*r + (hasNightOT(a.type) ? wage*(p.nightOtRate||0.5) : 0);
+        return s + attVal(a.type)*r + (hasNightOT(a.type) ? wage*(p.nightOtRate||1) : 0);
     }, 0);
 }
 
@@ -946,12 +947,26 @@ function weekLaborWorker(p, w, days) {
         const att = getAtt(p, w.id, ds);
         const wage = effectiveWage(w, ds);
         const r   = att==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(att)*r + (hasNightOT(att) ? wage*(p.nightOtRate||0.5) : 0);
+        return s + attVal(att)*r + (hasNightOT(att) ? wage*(p.nightOtRate||1) : 0);
     }, 0);
 }
 
 function weekDaysWorker(p, w, days) {
     return days.reduce((s,d) => s + attVal(getAtt(p, w.id, toYMD(d))), 0);
+}
+
+function getDailyExtra(p, date) {
+    return ((p.dailyExtras||[]).find(e => e.date === date)||{}).amount || 0;
+}
+function setDailyExtra(p, date, amount) {
+    if (!p.dailyExtras) p.dailyExtras = [];
+    const i = p.dailyExtras.findIndex(e => e.date === date);
+    if (!amount || amount <= 0) { if (i >= 0) p.dailyExtras.splice(i, 1); }
+    else if (i >= 0) p.dailyExtras[i].amount = amount;
+    else p.dailyExtras.push({ id: uid(), date, amount });
+}
+function weekDailyExtras(p, days) {
+    return days.reduce((s,d) => s + getDailyExtra(p, toYMD(d)), 0);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1252,7 +1267,8 @@ function renderAttendance(p) {
     const sunday    = S.weekStart;
     const days      = weekDays(sunday);
     const today     = todayYMD();
-    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0);
+    const extraTotal = weekDailyExtras(p, days);
+    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0) + extraTotal;
 
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -1268,8 +1284,10 @@ function renderAttendance(p) {
     <div class="legend" style="margin-bottom:10px;">
         <span style="font-weight:600;color:var(--gray-500);">Bấm để chuyển:</span>
         <span class="legend-item"><div class="legend-dot" style="background:#dcfce7;border-color:#86efac;color:#15803d;">1N</div> Cả ngày</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#fef9c3;border-color:#fde047;color:#854d0e;">½</div> Nửa ngày</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6;">TC</div> Tăng ca (CN)</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#fef9c3;border-color:#fde047;color:#854d0e;">½N</div> Nửa ngày</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#dbeafe;border-color:#60a5fa;color:#1d4ed8;font-size:8px;">1N+Đ</div> 1 ngày + tăng ca tối</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#e0f2fe;border-color:#38bdf8;color:#0369a1;font-size:8px;">½N+Đ</div> ½ ngày + tối</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6;">TC</div> Tăng ca CN</span>
     </div>
 
     <div class="att-table-wrap">
@@ -1311,6 +1329,28 @@ function renderAttendance(p) {
                 <td class="tr fw6 c-blue fs12">${wp>0?fmtMoney(wp):'-'}</td>
             </tr>`;
         }).join('')}
+        ${p.status==='active'?`<tr style="background:var(--warning-light);">
+            <td class="col-name">
+                <div class="fw6" style="font-size:13px;color:var(--warning);">+ Thêm thợ</div>
+                <div class="fs11 c-gray">Bấm ô để nhập tiền</div>
+            </td>
+            ${days.map(d => {
+                const ds  = toYMD(d);
+                const amt = getDailyExtra(p, ds);
+                const isToday = ds === today;
+                return `<td class="tc ${isToday?'today-cell':''}" style="padding:4px 2px;">
+                    <div onclick="editDailyExtra('${p.id}','${ds}')"
+                         style="min-width:34px;min-height:30px;border-radius:7px;border:1.5px dashed ${amt?'var(--warning)':'var(--gray-200)'};
+                                background:${amt?'#fef3c7':'white'};color:${amt?'var(--warning)':'var(--gray-300)'};
+                                display:inline-flex;align-items:center;justify-content:center;
+                                font-size:9px;font-weight:700;cursor:pointer;transition:all 0.12s;user-select:none;">
+                        ${amt?fmtMoney(amt):''}
+                    </div>
+                </td>`;
+            }).join('')}
+            <td></td>
+            <td class="tr fw6 fs12" style="color:var(--warning);">${extraTotal>0?fmtMoney(extraTotal):'-'}</td>
+        </tr>`:''}
         </tbody>
         <tfoot><tr>
             <td class="col-name">Tổng tuần</td>
@@ -1568,8 +1608,8 @@ function mNewProj() {
     <div class="form-group">
         <label class="form-label">Tăng ca tối (cộng thêm / ngày)</label>
         <select class="form-select" id="m-night-ot">
-            <option value="0.5" selected>0.5N – Nửa ngày công thêm</option>
-            <option value="1">1N – Một ngày công thêm</option>
+            <option value="0.5">0.5N – Nửa ngày công thêm</option>
+            <option value="1" selected>1N – Một ngày công thêm</option>
         </select>
     </div>
     <div class="modal-footer">
@@ -1584,7 +1624,7 @@ function doNewProj() {
     const p = {
         id: uid(), name,
         startDate: $v('m-start'), endDate: null, status: 'active',
-        revenue: $f('m-revenue'), otRate: $f('m-ot') || 1.5, nightOtRate: $f('m-night-ot') || 0.5,
+        revenue: $f('m-revenue'), otRate: $f('m-ot') || 1.5, nightOtRate: $f('m-night-ot') || 1,
         workerIds: [], attendance: [], expenses: [], advances: [], payments: [],
     };
     S.projects.push(p);
@@ -1618,8 +1658,8 @@ function mEditProj() {
     <div class="form-group">
         <label class="form-label">Tăng ca tối (cộng thêm / ngày)</label>
         <select class="form-select" id="m-night-ot">
-            <option value="0.5" ${(p.nightOtRate||0.5)==0.5?'selected':''}>0.5N – Nửa ngày công thêm</option>
-            <option value="1" ${(p.nightOtRate||0.5)==1?'selected':''}>1N – Một ngày công thêm</option>
+            <option value="0.5" ${(p.nightOtRate||1)==0.5?'selected':''}>0.5N – Nửa ngày công thêm</option>
+            <option value="1" ${(p.nightOtRate||1)==1?'selected':''}>1N – Một ngày công thêm</option>
         </select>
     </div>
     <div class="modal-footer">
@@ -1632,7 +1672,7 @@ function doEditProj() {
     const p = cur(), name = $v('m-name').trim();
     if (!name) { alert('Nhập tên công trình'); return; }
     p.name = name; p.startDate = $v('m-start');
-    p.revenue = $f('m-revenue'); p.otRate = $f('m-ot') || 1.5; p.nightOtRate = $f('m-night-ot') || 0.5;
+    p.revenue = $f('m-revenue'); p.otRate = $f('m-ot') || 1.5; p.nightOtRate = $f('m-night-ot') || 1;
     save(); closeModal(); renderAll();
 }
 
@@ -2099,6 +2139,17 @@ function setTab(t) { S.tab = t; renderMain(); }
 function prevWeek() { S.weekStart = addDays(S.weekStart, -7); renderMain(); }
 function nextWeek() { S.weekStart = addDays(S.weekStart,  7); renderMain(); }
 function goToday()  { S.weekStart = getSunday(new Date());    renderMain(); }
+
+function editDailyExtra(projId, date) {
+    const p = proj(projId);
+    if (!p || p.status !== 'active') return;
+    const cur = getDailyExtra(p, date);
+    const raw = prompt(`Tiền thêm thợ ngày ${date}:\n(Để trống hoặc 0 để xóa)`, cur || '');
+    if (raw === null) return;
+    const amt = parseInt(raw.replace(/[^\d]/g,'')) || 0;
+    setDailyExtra(p, date, amt);
+    save(); renderAll();
+}
 
 function toggleAtt(projId, workerId, date, isSun) {
     const p = S.projects.find(x=>x.id===projId);
