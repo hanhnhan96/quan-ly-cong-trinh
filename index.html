@@ -932,6 +932,7 @@ function laborCost(p) {
         });
     });
     t += (p.dailyExtras||[]).reduce((s,e) => s + (e.amount||0), 0);
+    t += (p.workerSupport||[]).reduce((s,x) => s + (x.amount||0), 0);
     return t;
 }
 
@@ -942,11 +943,13 @@ function totalAdvances(p){ return (p.advances||[]).reduce((s,x)=>s+(x.amount||0)
 function totalPaid(p)    { return (p.payments||[]).reduce((s,x)=>s+(x.amount||0),0); }
 
 function workerLaborCost(p, w) {
-    return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
+    const attCost = (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
         const wage = effectiveWage(w, a.date);
         const r = a.type==='overtime' ? wage*(p.otRate||1.5) : wage;
         return s + attVal(a.type)*r + (hasNightOT(a.type) ? wage*(p.nightOtRate||1) : 0);
     }, 0);
+    const supportCost = (p.workerSupport||[]).filter(s=>s.workerId===w.id).reduce((s,x)=>s+(x.amount||0),0);
+    return attCost + supportCost;
 }
 
 function workerTotalDays(p, w) {
@@ -965,6 +968,17 @@ function weekLaborWorker(p, w, days) {
 
 function weekDaysWorker(p, w, days) {
     return days.reduce((s,d) => s + attVal(getAtt(p, w.id, toYMD(d))), 0);
+}
+
+function getWorkerSupport(p, workerId, weekStart) {
+    return ((p.workerSupport||[]).find(s => s.workerId===workerId && s.weekStart===weekStart)||{}).amount || 0;
+}
+function setWorkerSupport(p, workerId, weekStart, amount) {
+    if (!p.workerSupport) p.workerSupport = [];
+    const i = p.workerSupport.findIndex(s => s.workerId===workerId && s.weekStart===weekStart);
+    if (!amount || amount <= 0) { if (i >= 0) p.workerSupport.splice(i, 1); }
+    else if (i >= 0) p.workerSupport[i].amount = amount;
+    else p.workerSupport.push({ id: uid(), workerId, weekStart, amount });
 }
 
 function getDailyExtra(p, date) {
@@ -1280,7 +1294,9 @@ function renderAttendance(p) {
     const days      = weekDays(sunday);
     const today     = todayYMD();
     const extraTotal = weekDailyExtras(p, days);
-    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0) + extraTotal;
+    const sunStr = toYMD(sunday);
+    const weekSupportTotal = workers.reduce((s,w)=>s+getWorkerSupport(p,w.id,sunStr),0);
+    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0) + extraTotal + weekSupportTotal;
 
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -1313,7 +1329,7 @@ function renderAttendance(p) {
                     ${DN[i]}<div style="font-weight:400;font-size:9px;color:var(--gray-400);">${fmtShort(d)}</div>
                 </th>`;
             }).join('')}
-            <th>Ngày</th><th>Tiền</th>
+            <th>Ngày</th><th>Tiền</th><th style="color:var(--warning);white-space:nowrap;">Hỗ trợ</th>
         </tr></thead>
         <tbody>
         ${workers.map(w => {
@@ -1339,6 +1355,11 @@ function renderAttendance(p) {
                 }).join('')}
                 <td class="tc fw6 fs12" style="color:var(--gray-700);">${wd>0?wd+'N':'-'}</td>
                 <td class="tr fw6 c-blue fs12">${wp>0?fmtMoney(wp):'-'}</td>
+                <td class="tr fs12">${p.status==='active'?`<div onclick="editWorkerSupport('${p.id}','${w.id}','${sunStr}')"
+                     style="cursor:pointer;padding:2px 4px;border-radius:6px;min-width:40px;text-align:right;
+                            ${getWorkerSupport(p,w.id,sunStr)?'color:var(--warning);font-weight:700;':'color:var(--gray-300);'}">
+                     ${getWorkerSupport(p,w.id,sunStr)?fmtMoney(getWorkerSupport(p,w.id,sunStr)):'+'}
+                </div>`:'-'}</td>
             </tr>`;
         }).join('')}
         ${p.status==='active'?`<tr style="background:var(--warning-light);">
@@ -1362,13 +1383,15 @@ function renderAttendance(p) {
             }).join('')}
             <td></td>
             <td class="tr fw6 fs12" style="color:var(--warning);">${extraTotal>0?fmtMoney(extraTotal):'-'}</td>
+            <td></td>
         </tr>`:''}
         </tbody>
         <tfoot><tr>
             <td class="col-name">Tổng tuần</td>
             <td colspan="${days.length}"></td>
             <td></td>
-            <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal)}</td>
+            <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal - weekSupportTotal)}</td>
+            <td class="tr" style="color:var(--warning);">${weekSupportTotal>0?fmtMoney(weekSupportTotal):'-'}</td>
         </tr></tfoot>
     </table>
     </div>
@@ -2151,6 +2174,18 @@ function setTab(t) { S.tab = t; renderMain(); }
 function prevWeek() { S.weekStart = addDays(S.weekStart, -7); renderMain(); }
 function nextWeek() { S.weekStart = addDays(S.weekStart,  7); renderMain(); }
 function goToday()  { S.weekStart = getSunday(new Date());    renderMain(); }
+
+function editWorkerSupport(projId, workerId, weekStart) {
+    const p = proj(projId);
+    if (!p || p.status !== 'active') return;
+    const w = worker(workerId);
+    const cur = getWorkerSupport(p, workerId, weekStart);
+    const raw = prompt(`Hỗ trợ thêm cho ${w?.name||''} tuần ${weekStart}:\n(Để trống hoặc 0 để xóa)`, cur || '');
+    if (raw === null) return;
+    const amt = parseInt(raw.replace(/[^\d]/g,'')) || 0;
+    setWorkerSupport(p, workerId, weekStart, amt);
+    save(); renderAll();
+}
 
 function editDailyExtra(projId, date) {
     const p = proj(projId);
