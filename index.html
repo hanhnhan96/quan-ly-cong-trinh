@@ -897,6 +897,15 @@ function projWorkers(p) {
     return (p.workerIds || []).map(id => S.workers.find(w => w.id === id)).filter(Boolean);
 }
 
+// Workers active in a specific week (not yet left)
+function projWorkersForWeek(p, weekStart) {
+    const leaves = p.workerLeaveFrom || [];
+    return projWorkers(p).filter(w => {
+        const lf = leaves.find(l => l.workerId === w.id);
+        return !lf || lf.weekStart > weekStart;
+    });
+}
+
 // ── Attendance numeric helpers ──────────────────────────────
 const ATT_CYCLE = [0, 1, 0.5, 1.5, 2];
 function typeToVal(t) { return t==='full'?1: t==='half'?0.5: t==='overtime'?1: t==='full_night'?2: t==='full_night_s'?1.5: 0; }
@@ -991,6 +1000,26 @@ function addWeeklyExtraWorker(projId, weekStart, workerId) {
     document.getElementById('modal-content').innerHTML = modalContent();
     renderMain();
 }
+function removeWorkerFromWeek(projId, workerId, weekStart) {
+    const p = proj(projId);
+    if (!p) return;
+    const w = S.workers.find(x => x.id === workerId);
+    const name = w ? w.name : 'thợ này';
+    if (!confirm(`Xóa ${name} khỏi tuần này và tất cả các tuần tiếp theo?\n\nDữ liệu chấm công cũ vẫn được giữ lại.`)) return;
+    if (!p.workerLeaveFrom) p.workerLeaveFrom = [];
+    // Remove any existing entry for this worker then add new one
+    p.workerLeaveFrom = p.workerLeaveFrom.filter(l => l.workerId !== workerId);
+    p.workerLeaveFrom.push({ workerId, weekStart });
+    save(); renderAll();
+}
+
+function restoreWorkerToWeek(projId, workerId) {
+    const p = proj(projId);
+    if (!p) return;
+    p.workerLeaveFrom = (p.workerLeaveFrom||[]).filter(l => l.workerId !== workerId);
+    save(); renderAll();
+}
+
 function removeWeeklyExtraWorker(projId, workerId, weekStart) {
     const p = proj(projId);
     if (!p) return;
@@ -1312,8 +1341,9 @@ function renderAttendance(p) {
     const today     = todayYMD();
     const extraTotal = weekDailyExtras(p, days);
     const sunStr = toYMD(sunday);
-    const weekSupportTotal = workers.reduce((s,w)=>s+getWorkerSupport(p,w.id,sunStr),0);
-    const weekTotal = workers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0) + extraTotal + weekSupportTotal;
+    const weekWorkers = projWorkersForWeek(p, sunStr);
+    const weekSupportTotal = weekWorkers.reduce((s,w)=>s+getWorkerSupport(p,w.id,sunStr),0);
+    const weekTotal = weekWorkers.reduce((s,w)=>s+weekLaborWorker(p,w,days),0) + extraTotal + weekSupportTotal;
 
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -1349,12 +1379,18 @@ function renderAttendance(p) {
             <th>Ngày</th><th>Tiền</th><th style="color:var(--warning);white-space:nowrap;">Hỗ trợ</th>
         </tr></thead>
         <tbody>
-        ${workers.map(w => {
+        ${weekWorkers.map(w => {
             const wd = weekDaysWorker(p, w, days);
             const wp = weekLaborWorker(p, w, days);
             return `<tr>
                 <td class="col-name">
-                    <div class="fw6" style="font-size:13px;">${esc(w.name)}</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                        <div class="fw6" style="font-size:13px;">${esc(w.name)}</div>
+                        ${p.status==='active'?`<button onclick="removeWorkerFromWeek('${p.id}','${w.id}','${sunStr}')"
+                            title="Nghỉ từ tuần này trở đi"
+                            style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex-shrink:0;"
+                            onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--gray-300)'">×</button>`:''}
+                    </div>
                     <div class="fs11 c-gray">${esc(w.role||'')} · ${fmtMoney(effectiveWage(w,toYMD(days[0])))}/N</div>
                 </td>
                 ${days.map((d,i) => {
@@ -1432,6 +1468,22 @@ function renderAttendance(p) {
         </tr></tfoot>
     </table>
     </div>
+    ${(()=>{
+        const leftWorkers = projWorkers(p).filter(w => {
+            const lf = (p.workerLeaveFrom||[]).find(l => l.workerId === w.id);
+            return lf && lf.weekStart <= sunStr;
+        });
+        if (!leftWorkers.length) return '';
+        return `<div style="margin-top:8px;padding:8px 12px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">
+            <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">ĐÃ NGHỈ TỪ TUẦN NÀY</div>
+            ${leftWorkers.map(w=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
+                <span style="font-size:13px;color:var(--gray-400);">👤 ${esc(w.name)}</span>
+                ${p.status==='active'?`<button onclick="restoreWorkerToWeek('${p.id}','${w.id}')"
+                    style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--gray-300);
+                           background:white;color:var(--gray-600);cursor:pointer;">↩ Khôi phục</button>`:''}
+            </div>`).join('')}
+        </div>`;
+    })()}
 
     <div class="card" style="margin-top:14px;">
         <div class="card-header">
