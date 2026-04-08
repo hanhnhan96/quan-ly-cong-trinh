@@ -2710,8 +2710,14 @@ function toggleExtraWorkerDay(projId, date, workerId) {
         p.extraWorkerDays.push({ id: uid(), date, workerId, value: next, amount: next * effectiveWage(w, date) });
     }
     save();
-    document.getElementById('modal-content').innerHTML = modalContent();
-    renderMain();
+    const scrollY = window.scrollY;
+    const wrap    = document.querySelector('.att-table-wrap');
+    const scrollX = wrap ? wrap.scrollLeft : 0;
+    const tc = document.getElementById('tab-content');
+    if (tc) tc.innerHTML = renderTab(p);
+    window.scrollTo(0, scrollY);
+    const newWrap = document.querySelector('.att-table-wrap');
+    if (newWrap) newWrap.scrollLeft = scrollX;
 }
 
 function toggleReportCard(projId) {
@@ -2763,8 +2769,14 @@ function toggleAtt(projId, workerId, date) {
     if (!p || p.status !== 'active') return;
     setAttVal(p, workerId, date, cycleAttVal(getAttVal(p, workerId, date)));
     save();
+    const scrollY   = window.scrollY;
+    const wrap      = document.querySelector('.att-table-wrap');
+    const scrollX   = wrap ? wrap.scrollLeft : 0;
     const tc = document.getElementById('tab-content');
     if (tc) tc.innerHTML = renderTab(p);
+    window.scrollTo(0, scrollY);
+    const newWrap = document.querySelector('.att-table-wrap');
+    if (newWrap) newWrap.scrollLeft = scrollX;
 }
 
 function deleteExpense(projId, expId) {
