@@ -263,11 +263,11 @@
             user-select: none; touch-action: manipulation;
         }
         .att-cell:active { transform: scale(0.9); }
-        .att-cell.full       { background: #dcfce7; border-color: #86efac; color: #15803d; }
-        .att-cell.half       { background: #fef9c3; border-color: #fde047; color: #854d0e; }
-        .att-cell.overtime   { background: var(--purple-light); border-color: #c4b5fd; color: #5b21b6; }
-        .att-cell.full_night { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; font-size: 9px; }
-        .att-cell.absent     { background: white; border-color: var(--gray-200); color: var(--gray-300); }
+        .att-cell.v1  { background: #dcfce7; border-color: #86efac; color: #15803d; }
+        .att-cell.v05 { background: #fef9c3; border-color: #fde047; color: #854d0e; }
+        .att-cell.v15 { background: #e0f2fe; border-color: #38bdf8; color: #0369a1; font-size: 9px; }
+        .att-cell.v2  { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; font-size: 9px; }
+        .att-cell.v0  { background: white; border-color: var(--gray-200); color: var(--gray-300); }
         .att-table tfoot tr td { background: var(--gray-50); font-weight: 700; border-top: 2px solid var(--gray-200); border-bottom: none; font-size: 12px; padding: 9px 6px; }
 
         /* ===== WEEK NAV ===== */
@@ -858,15 +858,13 @@ function weekDays(sun) { return Array.from({length:7}, (_,i) => addDays(sun, i))
 const DN    = ['CN','T2','T3','T4','T5','T6','T7'];
 const DFULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
 
-function attVal(t)   { return t==='full'||t==='full_night'?1 : t==='half'||t==='half_night'?0.5 : t==='overtime'?1 : 0; }
-function attLabel(t) { return t==='full'?'1N' : t==='half'?'½N' : t==='overtime'?'TC' : t==='full_night'?'1N+Đ' : t==='half_night'?'½N+Đ' : ''; }
-function hasNightOT(t) { return t==='full_night' || t==='half_night'; }
+function attVal(t)   { return t==='full'||t==='full_night'||t==='full_night_s'?1 : t==='half'?0.5 : t==='overtime'?1 : 0; }
+
+function hasNightOT(t) { return t==='full_night' || t==='full_night_s'; }
+function nightOTPay(t, wage, p) { return t==='full_night' ? wage*(p.nightOtRate||1) : t==='full_night_s' ? wage*0.5 : 0; }
 
 // Sunday = index 0 → overtime cycle
-function cycleAtt(cur, isSun) {
-    const c = isSun ? ['absent','overtime','full','half','full_night'] : ['absent','full','half','full_night'];
-    return c[(c.indexOf(cur)+1) % c.length];
-}
+
 
 function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -905,29 +903,24 @@ function projWorkers(p) {
     return (p.workerIds || []).map(id => S.workers.find(w => w.id === id)).filter(Boolean);
 }
 
-function getAtt(p, workerId, date) {
+function getAttVal(p, workerId, date) {
     const r = (p.attendance||[]).find(a => (a.workerId||a.empId) === workerId && a.date === date);
-    return r ? r.type : 'absent';
+    return r ? recVal(r) : 0;
 }
 
-function setAtt(p, workerId, date, type) {
+function setAttVal(p, workerId, date, value) {
     if (!p.attendance) p.attendance = [];
     const i = p.attendance.findIndex(a => (a.workerId||a.empId) === workerId && a.date === date);
-    if (type === 'absent') { if (i >= 0) p.attendance.splice(i, 1); }
-    else {
-        if (i >= 0) { p.attendance[i] = { workerId, date, type }; }
-        else p.attendance.push({ workerId, date, type });
-    }
+    if (!value) { if (i >= 0) p.attendance.splice(i, 1); }
+    else if (i >= 0) { p.attendance[i] = { workerId, date, value }; }
+    else p.attendance.push({ workerId, date, value });
 }
 
 function laborCost(p) {
     let t = 0;
     projWorkers(p).forEach(w => {
         (p.attendance||[]).filter(a => (a.workerId||a.empId) === w.id).forEach(a => {
-            const wage = effectiveWage(w, a.date);
-            const r = a.type === 'overtime' ? wage * (p.otRate||1.5) : wage;
-            t += attVal(a.type) * r;
-            if (hasNightOT(a.type)) t += wage * (p.nightOtRate||1);
+            t += recVal(a) * effectiveWage(w, a.date);
         });
     });
     t += (p.extraWorkerDays||[]).reduce((s,e) => s + (e.amount||0), 0);
@@ -942,31 +935,25 @@ function totalAdvances(p){ return (p.advances||[]).reduce((s,x)=>s+(x.amount||0)
 function totalPaid(p)    { return (p.payments||[]).reduce((s,x)=>s+(x.amount||0),0); }
 
 function workerLaborCost(p, w) {
-    const attCost = (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>{
-        const wage = effectiveWage(w, a.date);
-        const r = a.type==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(a.type)*r + (hasNightOT(a.type) ? wage*(p.nightOtRate||1) : 0);
-    }, 0);
+    const attCost = (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id)
+        .reduce((s,a) => s + recVal(a) * effectiveWage(w, a.date), 0);
     const supportCost = (p.workerSupport||[]).filter(s=>s.workerId===w.id).reduce((s,x)=>s+(x.amount||0),0);
     return attCost + supportCost;
 }
 
 function workerTotalDays(p, w) {
-    return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>s+attVal(a.type),0);
+    return (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id).reduce((s,a)=>s+recVal(a),0);
 }
 
 function weekLaborWorker(p, w, days) {
     return days.reduce((s,d) => {
-        const ds  = toYMD(d);
-        const att = getAtt(p, w.id, ds);
-        const wage = effectiveWage(w, ds);
-        const r   = att==='overtime' ? wage*(p.otRate||1.5) : wage;
-        return s + attVal(att)*r + (hasNightOT(att) ? wage*(p.nightOtRate||1) : 0);
+        const ds = toYMD(d);
+        return s + getAttVal(p, w.id, ds) * effectiveWage(w, ds);
     }, 0);
 }
 
 function weekDaysWorker(p, w, days) {
-    return days.reduce((s,d) => s + attVal(getAtt(p, w.id, toYMD(d))), 0);
+    return days.reduce((s,d) => s + getAttVal(p, w.id, toYMD(d)), 0);
 }
 
 function getWorkerSupport(p, workerId, weekStart) {
@@ -1018,7 +1005,8 @@ function weekExtraCost(p, workerId, days) {
 function weekExtraDays(p, workerId, days) {
     return days.reduce((s,d) => {
         const ds = toYMD(d);
-        return s + ((p.extraWorkerDays||[]).find(x => x.date===ds && x.workerId===workerId) ? 1 : 0);
+        const e = (p.extraWorkerDays||[]).find(x => x.date===ds && x.workerId===workerId);
+        return s + (e ? (e.value ?? 1) : 0);
     }, 0);
 }
 
@@ -1338,10 +1326,11 @@ function renderAttendance(p) {
 
     <div class="legend" style="margin-bottom:10px;">
         <span style="font-weight:600;color:var(--gray-500);">Bấm để chuyển:</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#dcfce7;border-color:#86efac;color:#15803d;">1N</div> Cả ngày</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#fef9c3;border-color:#fde047;color:#854d0e;">½N</div> Nửa ngày</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#dbeafe;border-color:#60a5fa;color:#1d4ed8;font-size:8px;">1N+Đ</div> 1 ngày + tăng ca tối</span>
-        <span class="legend-item"><div class="legend-dot" style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6;">TC</div> Tăng ca CN</span>
+        <span class="legend-item"><div class="legend-dot" style="background:white;border-color:#e5e7eb;color:#d1d5db;">0</div> Nghỉ</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#dcfce7;border-color:#86efac;color:#15803d;">1</div> Cả ngày</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#fef9c3;border-color:#fde047;color:#854d0e;">0.5</div> Nửa ngày</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#e0f2fe;border-color:#38bdf8;color:#0369a1;font-size:8px;">1.5</div> 1N + TC &lt;4h</span>
+        <span class="legend-item"><div class="legend-dot" style="background:#dbeafe;border-color:#60a5fa;color:#1d4ed8;font-size:8px;">2</div> 1N + TC &gt;4h</span>
     </div>
 
     <div class="att-table-wrap">
@@ -1368,14 +1357,13 @@ function renderAttendance(p) {
                 </td>
                 ${days.map((d,i) => {
                     const ds    = toYMD(d);
-                    const att   = getAtt(p, w.id, ds);
+                    const v     = getAttVal(p, w.id, ds);
                     const isToday = ds === today;
-                    const isSun   = i === 0;
                     return `<td class="tc ${isToday?'today-cell':''}">
-                        <div class="att-cell ${att}"
-                             onclick="toggleAtt('${p.id}','${w.id}','${ds}',${isSun})"
+                        <div class="att-cell ${attCls(v)}"
+                             onclick="toggleAtt('${p.id}','${w.id}','${ds}')"
                              title="${DFULL[i]}">
-                            ${attLabel(att)}
+                            ${attLabel(v)}
                         </div>
                     </td>`;
                 }).join('')}
@@ -1404,12 +1392,12 @@ function renderAttendance(p) {
                 ${days.map((d,i) => {
                     const ds = toYMD(d);
                     const entry = (p.extraWorkerDays||[]).find(e => e.date===ds && e.workerId===ewId);
+                    const ev = entry ? (entry.value ?? (entry.amount ? 1 : 0)) : 0;
                     const isToday = ds === today;
                     return `<td class="tc ${isToday?'today-cell':''}">
-                        <div class="att-cell ${entry?'full':'absent'}"
-                             onclick="toggleExtraWorkerDay('${p.id}','${ds}','${ewId}')"
-                             style="${entry?'':'opacity:0.35;'}">
-                            ${entry?'1N':''}
+                        <div class="att-cell ${attCls(ev)}"
+                             onclick="toggleExtraWorkerDay('${p.id}','${ds}','${ewId}')">
+                            ${attLabel(ev)}
                         </div>
                     </td>`;
                 }).join('')}
@@ -2263,10 +2251,12 @@ function toggleExtraWorkerDay(projId, date, workerId) {
     if (!p) return;
     if (!p.extraWorkerDays) p.extraWorkerDays = [];
     const i = p.extraWorkerDays.findIndex(e => e.date === date && e.workerId === workerId);
-    if (i >= 0) { p.extraWorkerDays.splice(i, 1); }
-    else {
+    const cur = i >= 0 ? (p.extraWorkerDays[i].value ?? 1) : 0;
+    const next = cycleAttVal(cur);
+    if (i >= 0) p.extraWorkerDays.splice(i, 1);
+    if (next > 0) {
         const w = worker(workerId);
-        p.extraWorkerDays.push({ id: uid(), date, workerId, amount: effectiveWage(w, date) });
+        p.extraWorkerDays.push({ id: uid(), date, workerId, value: next, amount: next * effectiveWage(w, date) });
     }
     save();
     document.getElementById('modal-content').innerHTML = modalContent();
@@ -2296,10 +2286,10 @@ function editDailyExtra(projId, date) {
     save(); renderAll();
 }
 
-function toggleAtt(projId, workerId, date, isSun) {
+function toggleAtt(projId, workerId, date) {
     const p = S.projects.find(x=>x.id===projId);
     if (!p || p.status !== 'active') return;
-    setAtt(p, workerId, date, cycleAtt(getAtt(p, workerId, date), isSun));
+    setAttVal(p, workerId, date, cycleAttVal(getAttVal(p, workerId, date)));
     save();
     const tc = document.getElementById('tab-content');
     if (tc) tc.innerHTML = renderTab(p);
