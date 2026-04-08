@@ -1802,37 +1802,50 @@ function renderPayments(p, wStart, weekTotal) {
 function renderExpenses(p) {
     const exps = [...(p.expenses||[])].sort((a,b)=>b.date>a.date?1:-1);
     const mc = materialCost(p), oc = otherCost(p);
+    const isMat = e => e.type === 'material';
     return `
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Vật liệu</div><div class="stat-value neutral">${fmtMoney(mc)}</div></div>
         <div class="stat-card"><div class="stat-label">Chi phí khác</div><div class="stat-value neutral">${fmtMoney(oc)}</div></div>
         <div class="stat-card"><div class="stat-label">Tổng phát sinh</div><div class="stat-value negative">${fmtMoney(mc+oc)}</div></div>
     </div>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">📝 Chi phí vật tư & khác (${exps.length})</span>
+    <div class="card" style="padding:0;">
+        <div class="card-header" style="padding:10px 14px;">
+            <span class="card-title">📝 Chi phí (${exps.length})</span>
             ${p.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openModal('add-expense')">+ Thêm</button>`:''}
         </div>
-        ${!exps.length ? `<div class="empty"><div class="empty-icon">📋</div><div class="empty-desc">Chưa có chi phí nào</div></div>` : `
-        <table class="data-table">
-            <thead><tr><th>Ngày</th><th>Loại</th><th>Người chi</th><th>Mô tả</th><th class="tr">Số tiền</th><th style="width:72px;"></th></tr></thead>
-            <tbody>
-            ${exps.map(e=>`<tr>
-                <td class="fs12 c-gray">${fmtDate(e.date)}</td>
-                <td><span class="tag tag-${e.type}">${e.type==='material'?'🧱 Vật liệu':'📦 Khác'}</span></td>
-                <td class="fs12 fw6" style="color:var(--gray-700);">${esc(e.payer||'-')}</td>
-                <td style="font-size:13px;">${esc(e.desc||'-')}</td>
-                <td class="tr fw6 fs12">${fmtMoney(e.amount)}</td>
-                <td style="white-space:nowrap;">${p.status==='active'?`
-                    <button class="btn btn-ghost btn-xs" onclick="editExpense('${p.id}','${e.id}')" title="Sửa">✏️</button>
-                    <button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')" title="Xóa">🗑️</button>`:''}</td>
-            </tr>`).join('')}
-            </tbody>
-            <tfoot><tr>
-                <td colspan="4" class="fw7">Tổng cộng</td>
-                <td class="tr c-red fw7">${fmtMoney(mc+oc)}</td><td></td>
-            </tr></tfoot>
-        </table>`}
+        ${!exps.length
+            ? `<div class="empty" style="padding:24px;"><div class="empty-icon">📋</div><div class="empty-desc">Chưa có chi phí nào</div></div>`
+            : exps.map((e,idx)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;
+                    border-top:${idx===0?'1px solid var(--gray-100)':'0'};
+                    border-bottom:1px solid var(--gray-100);">
+            <!-- icon loại -->
+            <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;
+                        background:${isMat(e)?'#fef9c3':'#f0fdf4'};">
+                ${isMat(e)?'🧱':'📦'}
+            </div>
+            <!-- nội dung -->
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${esc(e.desc||'–')}
+                </div>
+                <div class="fs11 c-gray">${fmtDate(e.date)}${e.payer?` · <span style="font-weight:600;color:var(--gray-600);">${esc(e.payer)}</span>`:''}</div>
+            </div>
+            <!-- số tiền + actions -->
+            <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:14px;font-weight:700;color:var(--danger);">${fmtMoney(e.amount)}</div>
+                ${p.status==='active'?`<div style="margin-top:2px;">
+                    <button class="btn btn-ghost btn-xs" onclick="editExpense('${p.id}','${e.id}')" style="padding:1px 4px;">✏️</button>
+                    <button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')" style="padding:1px 4px;">🗑️</button>
+                </div>`:''}
+            </div>
+        </div>`).join('')}
+        <div style="padding:10px 14px;background:var(--gray-50);border-top:2px solid var(--gray-200);
+                    display:flex;justify-content:space-between;font-weight:700;">
+            <span>Tổng cộng</span>
+            <span style="color:var(--danger);">${fmtMoney(mc+oc)}</span>
+        </div>
     </div>`;
 }
 
