@@ -495,6 +495,9 @@
             <div class="view-item" id="vi-summary" onclick="selectView('summary')">
                 <span class="view-item-icon">📊</span> Tổng lương tuần
             </div>
+            <div class="view-item" id="vi-report" onclick="selectView('report')">
+                <span class="view-item-icon">📈</span> Báo cáo công trình
+            </div>
         </div>
 
         <hr class="sidebar-divider">
@@ -897,12 +900,14 @@ function projWorkers(p) {
     return (p.workerIds || []).map(id => S.workers.find(w => w.id === id)).filter(Boolean);
 }
 
-// Workers active in a specific week (not yet left)
+// Workers active in a specific week
 function projWorkersForWeek(p, weekStart) {
-    const leaves = p.workerLeaveFrom || [];
+    const absent = p.workerAbsentWeeks || [];
     return projWorkers(p).filter(w => {
-        const lf = leaves.find(l => l.workerId === w.id);
-        return !lf || lf.weekStart > weekStart;
+        // Globally left (leaveDate set on worker)
+        if (w.leaveDate && w.leaveDate <= weekStart) return false;
+        // Absent only this week
+        return !absent.find(a => a.workerId === w.id && a.weekStart === weekStart);
     });
 }
 
@@ -970,6 +975,19 @@ function weekDaysWorker(p, w, days) {
 function getWorkerSupport(p, workerId, weekStart) {
     return ((p.workerSupport||[]).find(s => s.workerId===workerId && s.weekStart===weekStart)||{}).amount || 0;
 }
+function getWorkerAdvance(p, workerId, weekStart) {
+    return ((p.workerAdvances||[]).find(a => a.workerId===workerId && a.weekStart===weekStart)||{}).amount || 0;
+}
+function setWorkerAdvance(p, workerId, weekStart, amount) {
+    if (!p.workerAdvances) p.workerAdvances = [];
+    const i = p.workerAdvances.findIndex(a => a.workerId===workerId && a.weekStart===weekStart);
+    if (!amount || amount <= 0) { if (i >= 0) p.workerAdvances.splice(i, 1); }
+    else if (i >= 0) p.workerAdvances[i].amount = amount;
+    else p.workerAdvances.push({ workerId, weekStart, amount });
+}
+function totalWorkerAdvances(p) {
+    return (p.workerAdvances||[]).reduce((s,a) => s+(a.amount||0), 0);
+}
 function setWorkerSupport(p, workerId, weekStart, amount) {
     if (!p.workerSupport) p.workerSupport = [];
     const i = p.workerSupport.findIndex(s => s.workerId===workerId && s.weekStart===weekStart);
@@ -1003,20 +1021,15 @@ function addWeeklyExtraWorker(projId, weekStart, workerId) {
 function removeWorkerFromWeek(projId, workerId, weekStart) {
     const p = proj(projId);
     if (!p) return;
-    const w = S.workers.find(x => x.id === workerId);
-    const name = w ? w.name : 'thợ này';
-    if (!confirm(`Xóa ${name} khỏi tuần này và tất cả các tuần tiếp theo?\n\nDữ liệu chấm công cũ vẫn được giữ lại.`)) return;
-    if (!p.workerLeaveFrom) p.workerLeaveFrom = [];
-    // Remove any existing entry for this worker then add new one
-    p.workerLeaveFrom = p.workerLeaveFrom.filter(l => l.workerId !== workerId);
-    p.workerLeaveFrom.push({ workerId, weekStart });
+    if (!p.workerAbsentWeeks) p.workerAbsentWeeks = [];
+    p.workerAbsentWeeks.push({ workerId, weekStart });
     save(); renderAll();
 }
 
-function restoreWorkerToWeek(projId, workerId) {
+function restoreWorkerThisWeek(projId, workerId, weekStart) {
     const p = proj(projId);
     if (!p) return;
-    p.workerLeaveFrom = (p.workerLeaveFrom||[]).filter(l => l.workerId !== workerId);
+    p.workerAbsentWeeks = (p.workerAbsentWeeks||[]).filter(a => !(a.workerId===workerId && a.weekStart===weekStart));
     save(); renderAll();
 }
 
@@ -1052,7 +1065,7 @@ function renderSidebar() {
     document.getElementById('proj-count').textContent = S.projects.length;
 
     // Highlight active view items
-    ['workers','summary'].forEach(v => {
+    ['workers','summary','report'].forEach(v => {
         const el = document.getElementById('vi-'+v);
         if (el) el.classList.toggle('active', S.view === v);
     });
@@ -1086,6 +1099,7 @@ function renderMain() {
     const el = document.getElementById('main-area');
     if (S.view === 'workers')  { el.innerHTML = renderWorkersView(); return; }
     if (S.view === 'summary')  { el.innerHTML = renderSummaryView(); return; }
+    if (S.view === 'report')   { el.innerHTML = renderReportView(); return; }
     const p = cur();
     el.innerHTML = p ? renderProject(p) : renderEmpty();
 }
@@ -1137,20 +1151,22 @@ function renderWorkersView() {
 }
 
 function renderWorkerCard(w) {
-    // Count projects this worker is assigned to
     const projCount = S.projects.filter(p=>(p.workerIds||[]).includes(w.id)).length;
     const history   = [...(w.wageHistory||[])].sort((a,b)=>b.from.localeCompare(a.from));
-    return `<div class="worker-card">
-        <div class="worker-avatar">${initials(w.name)}</div>
+    const hasLeft   = !!w.leaveDate;
+    return `<div class="worker-card" style="${hasLeft?'opacity:0.6;':''}">
+        <div class="worker-avatar" style="${hasLeft?'background:var(--gray-300);':''}">${initials(w.name)}</div>
         <div class="worker-info">
-            <div class="worker-name">${esc(w.name)}</div>
+            <div class="worker-name">${esc(w.name)}${hasLeft?` <span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:10px;font-weight:600;">Đã nghỉ</span>`:''}</div>
             <div class="worker-meta">${esc(w.role||'Thợ')}${projCount?` · ${projCount} công trình`:''}</div>
             <div class="worker-wage">${fmtMoney(w.wage)}/ngày</div>
+            ${hasLeft?`<div class="fs11" style="color:var(--danger);">Nghỉ từ ${fmtDate(w.leaveDate)}</div>`:''}
             ${history.length>1?`<div class="fs11 c-gray">(${history.length} mức lương)</div>`:''}
         </div>
         <div class="worker-actions">
-            <button class="btn btn-warning btn-xs" onclick="openModal('raise-wage','${w.id}')" title="Tăng lương">📈</button>
+            ${!hasLeft?`<button class="btn btn-warning btn-xs" onclick="openModal('raise-wage','${w.id}')" title="Tăng lương">📈</button>`:''}
             <button class="btn btn-outline btn-xs" onclick="openModal('edit-worker','${w.id}')">✏️</button>
+            <button class="btn btn-${hasLeft?'outline':'ghost'} btn-xs" onclick="openModal('set-worker-leave','${w.id}')" title="${hasLeft?'Đổi ngày nghỉ / Cho đi làm lại':'Đánh dấu nghỉ luôn'}">${hasLeft?'↩ Làm lại':'🚪 Nghỉ'}</button>
             <button class="btn btn-ghost btn-xs" onclick="askDeleteWorker('${w.id}')">🗑️</button>
         </div>
     </div>`;
@@ -1258,6 +1274,106 @@ function renderSummaryView() {
             </table>
             </div>
         </div>`}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  REPORT VIEW
+// ══════════════════════════════════════════════════════════
+function renderReportView() {
+    if (!S.reportFrom) S.reportFrom = '';
+    if (!S.reportTo)   S.reportTo   = '';
+    const from = S.reportFrom, to = S.reportTo;
+
+    const projs = S.projects;
+    if (!projs.length) return `<div class="main-header"><div class="main-title">📈 Báo cáo công trình</div></div>
+        <div class="tab-content"><div class="card"><div class="empty"><div class="empty-icon">📈</div>
+        <div class="empty-desc">Chưa có công trình nào</div></div></div></div>`;
+
+    // Filter expenses/advances by date range
+    function inRange(date) {
+        if (from && date < from) return false;
+        if (to   && date > to)   return false;
+        return true;
+    }
+
+    let grandAdv=0, grandLabor=0, grandMat=0, grandOther=0, grandProfit=0;
+
+    const rows = projs.map(p => {
+        const adv   = (p.advances||[]).filter(a=>inRange(a.date)).reduce((s,a)=>s+(a.amount||0),0);
+        const mat   = (p.expenses||[]).filter(e=>e.type==='material'&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
+        const other = (p.expenses||[]).filter(e=>e.type==='other'&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
+        // Labor: sum attendance in range
+        const labor = projWorkers(p).reduce((s,w) => {
+            return s + (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id&&inRange(a.date))
+                .reduce((ss,a)=>ss+recVal(a)*effectiveWage(w,a.date),0);
+        },0) + (p.extraWorkerDays||[]).filter(e=>inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0)
+          + (p.workerSupport||[]).reduce((s,x)=>s+(from||to?0:x.amount||0),0);
+        const total  = labor + mat + other;
+        const profit = adv - total;
+        grandAdv+=adv; grandLabor+=labor; grandMat+=mat; grandOther+=other; grandProfit+=profit;
+        return { p, adv, labor, mat, other, total, profit };
+    });
+
+    return `
+    <div class="main-header">
+        <div><div class="main-title">📈 Báo cáo công trình</div>
+        <div class="main-meta">${projs.length} công trình</div></div>
+    </div>
+    <div class="tab-content">
+        <div class="card" style="margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:600;color:var(--gray-600);">Lọc thời gian:</span>
+                <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
+                    value="${from}" onchange="S.reportFrom=this.value;renderMain()">
+                <span style="color:var(--gray-400);">–</span>
+                <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
+                    value="${to}" onchange="S.reportTo=this.value;renderMain()">
+                ${(from||to)?`<button onclick="S.reportFrom='';S.reportTo='';renderMain()"
+                    style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--gray-200);background:white;cursor:pointer;color:var(--gray-500);">✕ Xóa lọc</button>`:''}
+            </div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom:14px;">
+            <div class="stat-card"><div class="stat-label">Tạm ứng nhận</div><div class="stat-value positive">${fmtMoney(grandAdv)}</div></div>
+            <div class="stat-card"><div class="stat-label">Tổng chi phí</div><div class="stat-value negative">${fmtMoney(grandLabor+grandMat+grandOther)}</div></div>
+            <div class="stat-card"><div class="stat-label">${grandProfit>=0?'💰 Lợi nhuận':'📉 Lỗ'}</div>
+                <div class="stat-value ${grandProfit>=0?'positive':'negative'}">${grandProfit<0?'-':''}${fmtMoney(Math.abs(grandProfit))}</div></div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;">
+        <table class="data-table">
+            <thead><tr>
+                <th>Công trình</th>
+                <th class="tr">Tạm ứng</th>
+                <th class="tr">Nhân công</th>
+                <th class="tr">Vật liệu</th>
+                <th class="tr">Khác</th>
+                <th class="tr">Lãi/Lỗ</th>
+            </tr></thead>
+            <tbody>
+            ${rows.map(({p,adv,labor,mat,other,profit})=>`<tr style="cursor:pointer;" onclick="selectView('${p.id}')">
+                <td>
+                    <div class="fw6 fs13">${esc(p.name)}</div>
+                    <div class="fs11 c-gray">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'} · ${fmtDate(p.startDate)}</div>
+                </td>
+                <td class="tr fs12 c-green fw6">${adv?fmtMoney(adv):'-'}</td>
+                <td class="tr fs12">${labor?fmtMoney(labor):'-'}</td>
+                <td class="tr fs12">${mat?fmtMoney(mat):'-'}</td>
+                <td class="tr fs12">${other?fmtMoney(other):'-'}</td>
+                <td class="tr fs12 fw6 ${profit>=0?'c-green':'c-red'}">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</td>
+            </tr>`).join('')}
+            </tbody>
+            <tfoot><tr>
+                <td class="fw7">Tổng cộng</td>
+                <td class="tr fw7 c-green">${fmtMoney(grandAdv)}</td>
+                <td class="tr fw7">${fmtMoney(grandLabor)}</td>
+                <td class="tr fw7">${fmtMoney(grandMat)}</td>
+                <td class="tr fw7">${fmtMoney(grandOther)}</td>
+                <td class="tr fw7 ${grandProfit>=0?'c-green':'c-red'}">${grandProfit<0?'-':''}${fmtMoney(Math.abs(grandProfit))}</td>
+            </tr></tfoot>
+        </table>
+        </div>
     </div>`;
 }
 
@@ -1376,7 +1492,7 @@ function renderAttendance(p) {
                     ${DN[i]}<div style="font-weight:400;font-size:9px;color:var(--gray-400);">${fmtShort(d)}</div>
                 </th>`;
             }).join('')}
-            <th>Ngày</th><th>Tiền</th><th style="color:var(--warning);white-space:nowrap;">Hỗ trợ</th>
+            <th>Ngày</th><th>Tiền</th><th style="color:var(--warning);white-space:nowrap;">Hỗ trợ</th><th style="color:var(--danger);white-space:nowrap;">Ứng</th>
         </tr></thead>
         <tbody>
         ${weekWorkers.map(w => {
@@ -1412,6 +1528,11 @@ function renderAttendance(p) {
                             ${getWorkerSupport(p,w.id,sunStr)?'color:var(--warning);font-weight:700;':'color:var(--gray-300);'}">
                      ${getWorkerSupport(p,w.id,sunStr)?fmtMoney(getWorkerSupport(p,w.id,sunStr)):'+'}
                 </div>`:'-'}</td>
+                ${(()=>{ const adv=getWorkerAdvance(p,w.id,sunStr);
+                    return `<td class="tr fs12">${p.status==='active'?`<div onclick="editWorkerAdvance('${p.id}','${w.id}','${sunStr}')"
+                     style="cursor:pointer;padding:2px 4px;border-radius:6px;min-width:40px;text-align:right;
+                            ${adv?'color:var(--danger);font-weight:700;':'color:var(--gray-300);'}">
+                     ${adv?fmtMoney(adv):'+'}</div>`:adv?fmtMoney(adv):'-'}</td>`; })()}
             </tr>`;
         }).join('')}
         ${getWeeklyExtraWorkers(p, sunStr).map(({workerId: ewId}) => {
@@ -1446,10 +1567,11 @@ function renderAttendance(p) {
                             ${sup?'color:var(--warning);font-weight:700;':'color:var(--gray-300);'}">
                      ${sup?fmtMoney(sup):'+'}
                 </div>`:'-'}</td>
+                <td></td>
             </tr>`;
         }).join('')}
         ${p.status==='active'?`<tr style="background:var(--warning-light);">
-            <td colspan="${days.length+3}" style="padding:6px 10px;">
+            <td colspan="${days.length+4}" style="padding:6px 10px;">
                 <button onclick="openModal('add-weekly-extra','${p.id}|${sunStr}')"
                         style="background:none;border:1.5px dashed var(--warning);border-radius:8px;
                                color:var(--warning);font-size:12px;font-weight:700;cursor:pointer;
@@ -1465,22 +1587,23 @@ function renderAttendance(p) {
             <td></td>
             <td class="tr" style="color:var(--primary);">${fmtMoney(weekTotal)}</td>
             <td></td>
+            <td></td>
         </tr></tfoot>
     </table>
     </div>
     ${(()=>{
-        const leftWorkers = projWorkers(p).filter(w => {
-            const lf = (p.workerLeaveFrom||[]).find(l => l.workerId === w.id);
-            return lf && lf.weekStart <= sunStr;
+        const absentWorkers = projWorkers(p).filter(w => {
+            if (w.leaveDate && w.leaveDate <= sunStr) return false; // nghỉ luôn → không hiển thị ở đây
+            return (p.workerAbsentWeeks||[]).some(a => a.workerId===w.id && a.weekStart===sunStr);
         });
-        if (!leftWorkers.length) return '';
+        if (!absentWorkers.length) return '';
         return `<div style="margin-top:8px;padding:8px 12px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">
-            <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">ĐÃ NGHỈ TỪ TUẦN NÀY</div>
-            ${leftWorkers.map(w=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
+            <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">NGHỈ TUẦN NÀY</div>
+            ${absentWorkers.map(w=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
                 <span style="font-size:13px;color:var(--gray-400);">👤 ${esc(w.name)}</span>
-                ${p.status==='active'?`<button onclick="restoreWorkerToWeek('${p.id}','${w.id}')"
+                ${p.status==='active'?`<button onclick="restoreWorkerThisWeek('${p.id}','${w.id}','${sunStr}')"
                     style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--gray-300);
-                           background:white;color:var(--gray-600);cursor:pointer;">↩ Khôi phục</button>`:''}
+                           background:white;color:var(--gray-600);cursor:pointer;">↩ Cho đi làm lại</button>`:''}
             </div>`).join('')}
         </div>`;
     })()}
@@ -1692,6 +1815,7 @@ function modalContent() {
         case 'edit-proj':      return mEditProj();
         case 'add-worker':     return mAddWorker();
         case 'edit-worker':    return mEditWorker();
+        case 'set-worker-leave': return mSetWorkerLeave(modalExtra);
         case 'raise-wage':     return mRaiseWage();
         case 'assign-workers': return mAssignWorkers();
         case 'add-expense':    return mAddExpense();
@@ -1846,6 +1970,38 @@ function doAddWorker() {
     save(); closeModal(); renderAll();
 }
 
+function mSetWorkerLeave(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    if (!w) return '';
+    return `<div class="modal-title">🚪 Nghỉ luôn – ${esc(w.name)}</div>
+    ${w.leaveDate?`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:#991b1b;">
+        Hiện đang nghỉ từ ${fmtDate(w.leaveDate)}</div>`:''}
+    <div class="form-group">
+        <label class="form-label">Nghỉ từ ngày</label>
+        <input type="date" class="form-input" id="m-leave-date" value="${w.leaveDate||todayYMD()}">
+    </div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Từ ngày này, thợ sẽ không xuất hiện trong bảng chấm công ở mọi công trình.</div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        ${w.leaveDate?`<button class="btn btn-success" onclick="clearWorkerLeave('${wid}')">↩ Cho đi làm lại</button>`:''}
+        <button class="btn btn-danger" onclick="setWorkerLeave('${wid}')">✓ Xác nhận nghỉ</button>
+    </div>`;
+}
+
+function setWorkerLeave(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    if (!w) return;
+    w.leaveDate = $v('m-leave-date') || todayYMD();
+    save(); closeModal(); renderAll();
+}
+
+function clearWorkerLeave(wid) {
+    const w = S.workers.find(x=>x.id===wid);
+    if (!w) return;
+    delete w.leaveDate;
+    save(); closeModal(); renderAll();
+}
+
 function mEditWorker() {
     const w = S.workers.find(x=>x.id===modalExtra);
     if (!w) return '';
@@ -1983,18 +2139,33 @@ function mAddExpense() {
         <label class="form-label">Số tiền (₫) *</label>
         <input type="number" class="form-input" id="m-amount" placeholder="0" min="0" inputmode="numeric">
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="flex-wrap:wrap;gap:6px;">
         <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-outline btn-primary" onclick="doAddExpense(true)">+ Thêm & tiếp</button>
         <button class="btn btn-primary" onclick="doAddExpense()">+ Thêm</button>
     </div>`;
 }
 
-function doAddExpense() {
+function doAddExpense(keepOpen) {
     const amount = $f('m-amount');
     if (!amount) { alert('Nhập số tiền'); return; }
+    const date = $v('m-date'), type = $v('m-type'), payer = $v('m-payer').trim();
     if (!cur().expenses) cur().expenses = [];
-    cur().expenses.push({ id:uid(), date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), payer:$v('m-payer').trim(), amount });
-    save(); closeModal(); renderAll();
+    cur().expenses.push({ id:uid(), date, type, desc:$v('m-desc').trim(), payer, amount });
+    save();
+    if (keepOpen) {
+        // Reopen with same date/type/payer, only clear desc & amount
+        const savedDate = date, savedType = type, savedPayer = payer;
+        openModal('add-expense');
+        document.getElementById('m-date').value  = savedDate;
+        document.getElementById('m-type').value  = savedType;
+        document.getElementById('m-payer').value = savedPayer;
+        document.getElementById('m-amount').value = '';
+        document.getElementById('m-desc').value  = '';
+        document.getElementById('m-amount').focus();
+    } else {
+        closeModal(); renderAll();
+    }
 }
 
 function editExpense(projId, expId) {
@@ -2371,6 +2542,18 @@ function toggleExtraWorkerDay(projId, date, workerId) {
     save();
     document.getElementById('modal-content').innerHTML = modalContent();
     renderMain();
+}
+
+function editWorkerAdvance(projId, workerId, weekStart) {
+    const p = proj(projId);
+    if (!p || p.status !== 'active') return;
+    const w = worker(workerId);
+    const cur = getWorkerAdvance(p, workerId, weekStart);
+    const raw = prompt(`Ứng lương cho ${w?.name||''} tuần ${weekStart}:\n(Để trống hoặc 0 để xóa)`, cur || '');
+    if (raw === null) return;
+    const amt = parseInt(raw.replace(/[^\d]/g,'')) || 0;
+    setWorkerAdvance(p, workerId, weekStart, amt);
+    save(); renderAll();
 }
 
 function editWorkerSupport(projId, workerId, weekStart) {
