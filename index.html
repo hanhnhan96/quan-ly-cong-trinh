@@ -903,6 +903,14 @@ function projWorkers(p) {
     return (p.workerIds || []).map(id => S.workers.find(w => w.id === id)).filter(Boolean);
 }
 
+// ── Attendance numeric helpers ──────────────────────────────
+const ATT_CYCLE = [0, 1, 0.5, 1.5, 2];
+function typeToVal(t) { return t==='full'?1: t==='half'?0.5: t==='overtime'?1: t==='full_night'?2: t==='full_night_s'?1.5: 0; }
+function recVal(r)    { return r.value !== undefined ? r.value : typeToVal(r.type||''); }
+function attCls(v)    { return v===1?'v1': v===0.5?'v05': v===1.5?'v15': v===2?'v2': 'v0'; }
+function attLabel(v)  { return v===0.5?'0.5': v>0?String(v):''; }
+function cycleAttVal(cur) { const i=ATT_CYCLE.indexOf(cur); return ATT_CYCLE[(i<0?0:i+1)%ATT_CYCLE.length]; }
+
 function getAttVal(p, workerId, date) {
     const r = (p.attendance||[]).find(a => (a.workerId||a.empId) === workerId && a.date === date);
     return r ? recVal(r) : 0;
