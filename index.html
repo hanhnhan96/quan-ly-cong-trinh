@@ -1290,91 +1290,132 @@ function renderReportView() {
         <div class="tab-content"><div class="card"><div class="empty"><div class="empty-icon">📈</div>
         <div class="empty-desc">Chưa có công trình nào</div></div></div></div>`;
 
-    // Filter expenses/advances by date range
     function inRange(date) {
         if (from && date < from) return false;
         if (to   && date > to)   return false;
         return true;
     }
-
-    let grandAdv=0, grandLabor=0, grandMat=0, grandOther=0, grandProfit=0;
-
-    const rows = projs.map(p => {
+    function calcProj(p) {
         const adv   = (p.advances||[]).filter(a=>inRange(a.date)).reduce((s,a)=>s+(a.amount||0),0);
         const mat   = (p.expenses||[]).filter(e=>e.type==='material'&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
         const other = (p.expenses||[]).filter(e=>e.type==='other'&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
-        // Labor: sum attendance in range
-        const labor = projWorkers(p).reduce((s,w) => {
-            return s + (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id&&inRange(a.date))
-                .reduce((ss,a)=>ss+recVal(a)*effectiveWage(w,a.date),0);
-        },0) + (p.extraWorkerDays||[]).filter(e=>inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0)
-          + (p.workerSupport||[]).reduce((s,x)=>s+(from||to?0:x.amount||0),0);
-        const total  = labor + mat + other;
+        const workers = projWorkers(p);
+        const wRows = workers.map(w => {
+            const days = (p.attendance||[]).filter(a=>(a.workerId||a.empId)===w.id&&inRange(a.date));
+            const nd   = days.reduce((s,a)=>s+recVal(a),0);
+            const amt  = days.reduce((s,a)=>s+recVal(a)*effectiveWage(w,a.date),0);
+            const sup  = (p.workerSupport||[]).filter(x=>x.workerId===w.id&&(!from&&!to||inRange(x.weekStart))).reduce((s,x)=>s+(x.amount||0),0);
+            return { w, nd, amt: amt+sup };
+        }).filter(r=>r.nd>0||r.amt>0);
+        const labor = wRows.reduce((s,r)=>s+r.amt,0)
+            + (p.extraWorkerDays||[]).filter(e=>inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
+        const paid  = (p.payments||[]).filter(x=>inRange(x.date)).reduce((s,x)=>s+(x.amount||0),0);
+        const total = labor + mat + other;
         const profit = adv - total;
-        grandAdv+=adv; grandLabor+=labor; grandMat+=mat; grandOther+=other; grandProfit+=profit;
-        return { p, adv, labor, mat, other, total, profit };
-    });
+        return { adv, mat, other, labor, total, profit, paid, wRows };
+    }
+
+    let gAdv=0,gLabor=0,gMat=0,gOther=0,gProfit=0;
+    const calcs = projs.map(p => { const c=calcProj(p); gAdv+=c.adv; gLabor+=c.labor; gMat+=c.mat; gOther+=c.other; gProfit+=c.profit; return {p,...c}; });
+
+    const filterBar = `<div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:600;color:var(--gray-600);">Lọc thời gian:</span>
+            <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
+                value="${from}" onchange="S.reportFrom=this.value;renderMain()">
+            <span style="color:var(--gray-400);">–</span>
+            <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
+                value="${to}" onchange="S.reportTo=this.value;renderMain()">
+            ${(from||to)?`<button onclick="S.reportFrom='';S.reportTo='';renderMain()"
+                style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--gray-200);background:white;cursor:pointer;color:var(--gray-500);">✕ Xóa lọc</button>`:''}
+        </div>
+    </div>`;
+
+    const grandStats = `<div class="stats-grid" style="margin-bottom:14px;">
+        <div class="stat-card"><div class="stat-label">Tổng tạm ứng</div><div class="stat-value positive">${fmtMoney(gAdv)}</div></div>
+        <div class="stat-card"><div class="stat-label">Tổng chi phí</div><div class="stat-value negative">${fmtMoney(gLabor+gMat+gOther)}</div></div>
+        <div class="stat-card"><div class="stat-label">${gProfit>=0?'💰 Lợi nhuận':'📉 Lỗ'}</div>
+            <div class="stat-value ${gProfit>=0?'positive':'negative'}">${gProfit<0?'-':''}${fmtMoney(Math.abs(gProfit))}</div></div>
+    </div>`;
+
+    const projCards = calcs.map(({p, adv, mat, other, labor, total, profit, paid, wRows}) => {
+        const owed  = Math.max(0, labor - paid);
+        const rev   = p.revenue || 0;
+        return `<div class="card" style="margin-bottom:14px;">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <div style="font-size:16px;font-weight:800;color:var(--gray-900);">${esc(p.name)}</div>
+                    <div class="fs12 c-gray">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'} · Bắt đầu ${fmtDate(p.startDate)}</div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="selectView('${p.id}')">Vào công trình →</button>
+            </div>
+            <!-- Stats -->
+            <div class="stats-grid" style="margin-bottom:12px;">
+                <div class="stat-card" style="padding:10px;">
+                    <div class="stat-label">Giá trị HĐ</div>
+                    <div style="font-size:15px;font-weight:700;color:var(--primary);">${rev?fmtMoney(rev):'–'}</div>
+                </div>
+                <div class="stat-card" style="padding:10px;">
+                    <div class="stat-label">Tạm ứng nhận</div>
+                    <div style="font-size:15px;font-weight:700;color:var(--success);">${fmtMoney(adv)}</div>
+                </div>
+                <div class="stat-card" style="padding:10px;">
+                    <div class="stat-label">Tổng chi</div>
+                    <div style="font-size:15px;font-weight:700;color:var(--danger);">${fmtMoney(total)}</div>
+                </div>
+                <div class="stat-card" style="padding:10px;">
+                    <div class="stat-label">${profit>=0?'💰 Lãi':'📉 Lỗ'}</div>
+                    <div style="font-size:15px;font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'};">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</div>
+                </div>
+            </div>
+            <!-- 2-col detail -->
+            <div class="two-col">
+                <div>
+                    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">BÁO CÁO LÃI/LỖ</div>
+                    <table class="pl-table"><tbody>
+                        <tr><td style="color:var(--success);font-weight:700;">THU</td><td></td></tr>
+                        <tr><td style="padding-left:12px;">Tạm ứng</td><td class="c-green">${fmtMoney(adv)}</td></tr>
+                        <tr><td style="color:var(--danger);font-weight:700;padding-top:8px;">CHI</td><td></td></tr>
+                        <tr><td style="padding-left:12px;">Nhân công</td><td>${fmtMoney(labor)}</td></tr>
+                        <tr><td style="padding-left:24px;" class="fs12 c-gray">Đã trả thợ</td><td class="c-green fs12">-${fmtMoney(paid)}</td></tr>
+                        <tr><td style="padding-left:24px;" class="fs12 c-gray">Còn nợ</td><td class="${owed>0?'c-orange':'c-green'} fs12">${fmtMoney(owed)}</td></tr>
+                        <tr><td style="padding-left:12px;">Vật liệu</td><td>${fmtMoney(mat)}</td></tr>
+                        <tr><td style="padding-left:12px;">Chi phí khác</td><td>${fmtMoney(other)}</td></tr>
+                    </tbody><tfoot><tr>
+                        <td class="fw7">${profit>=0?'💰 Lãi':'📉 Lỗ'}</td>
+                        <td class="${profit>=0?'c-green':'c-red'} fw7">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</td>
+                    </tr></tfoot></table>
+                </div>
+                <div>
+                    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">TỪNG THỢ</div>
+                    ${!wRows.length ? `<div class="fs12 c-gray" style="padding:8px 0;">Chưa có dữ liệu chấm công</div>` : `
+                    <table class="data-table">
+                        <thead><tr><th>Thợ</th><th class="tc">Ngày</th><th class="tr">Tiền</th></tr></thead>
+                        <tbody>
+                        ${wRows.map(({w,nd,amt})=>`<tr>
+                            <td><div class="fw6 fs12">${esc(w.name)}</div><div class="fs11 c-gray">${esc(w.role||'')}</div></td>
+                            <td class="tc fw6 fs12">${nd>0?nd+'N':'-'}</td>
+                            <td class="tr fw6 c-blue fs12">${amt>0?fmtMoney(amt):'-'}</td>
+                        </tr>`).join('')}
+                        </tbody>
+                        <tfoot><tr>
+                            <td class="fw7">Tổng</td>
+                            <td class="tc fw7">${wRows.reduce((s,r)=>s+r.nd,0)}N</td>
+                            <td class="tr fw7 c-blue">${fmtMoney(wRows.reduce((s,r)=>s+r.amt,0))}</td>
+                        </tr></tfoot>
+                    </table>`}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
 
     return `
     <div class="main-header">
         <div><div class="main-title">📈 Báo cáo công trình</div>
         <div class="main-meta">${projs.length} công trình</div></div>
     </div>
-    <div class="tab-content">
-        <div class="card" style="margin-bottom:14px;">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span style="font-size:13px;font-weight:600;color:var(--gray-600);">Lọc thời gian:</span>
-                <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
-                    value="${from}" onchange="S.reportFrom=this.value;renderMain()">
-                <span style="color:var(--gray-400);">–</span>
-                <input type="date" style="border:1px solid var(--gray-200);border-radius:8px;padding:5px 10px;font-size:13px;"
-                    value="${to}" onchange="S.reportTo=this.value;renderMain()">
-                ${(from||to)?`<button onclick="S.reportFrom='';S.reportTo='';renderMain()"
-                    style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--gray-200);background:white;cursor:pointer;color:var(--gray-500);">✕ Xóa lọc</button>`:''}
-            </div>
-        </div>
-
-        <div class="stats-grid" style="margin-bottom:14px;">
-            <div class="stat-card"><div class="stat-label">Tạm ứng nhận</div><div class="stat-value positive">${fmtMoney(grandAdv)}</div></div>
-            <div class="stat-card"><div class="stat-label">Tổng chi phí</div><div class="stat-value negative">${fmtMoney(grandLabor+grandMat+grandOther)}</div></div>
-            <div class="stat-card"><div class="stat-label">${grandProfit>=0?'💰 Lợi nhuận':'📉 Lỗ'}</div>
-                <div class="stat-value ${grandProfit>=0?'positive':'negative'}">${grandProfit<0?'-':''}${fmtMoney(Math.abs(grandProfit))}</div></div>
-        </div>
-
-        <div class="card" style="padding:0;overflow:hidden;">
-        <table class="data-table">
-            <thead><tr>
-                <th>Công trình</th>
-                <th class="tr">Tạm ứng</th>
-                <th class="tr">Nhân công</th>
-                <th class="tr">Vật liệu</th>
-                <th class="tr">Khác</th>
-                <th class="tr">Lãi/Lỗ</th>
-            </tr></thead>
-            <tbody>
-            ${rows.map(({p,adv,labor,mat,other,profit})=>`<tr style="cursor:pointer;" onclick="selectView('${p.id}')">
-                <td>
-                    <div class="fw6 fs13">${esc(p.name)}</div>
-                    <div class="fs11 c-gray">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'} · ${fmtDate(p.startDate)}</div>
-                </td>
-                <td class="tr fs12 c-green fw6">${adv?fmtMoney(adv):'-'}</td>
-                <td class="tr fs12">${labor?fmtMoney(labor):'-'}</td>
-                <td class="tr fs12">${mat?fmtMoney(mat):'-'}</td>
-                <td class="tr fs12">${other?fmtMoney(other):'-'}</td>
-                <td class="tr fs12 fw6 ${profit>=0?'c-green':'c-red'}">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</td>
-            </tr>`).join('')}
-            </tbody>
-            <tfoot><tr>
-                <td class="fw7">Tổng cộng</td>
-                <td class="tr fw7 c-green">${fmtMoney(grandAdv)}</td>
-                <td class="tr fw7">${fmtMoney(grandLabor)}</td>
-                <td class="tr fw7">${fmtMoney(grandMat)}</td>
-                <td class="tr fw7">${fmtMoney(grandOther)}</td>
-                <td class="tr fw7 ${grandProfit>=0?'c-green':'c-red'}">${grandProfit<0?'-':''}${fmtMoney(Math.abs(grandProfit))}</td>
-            </tr></tfoot>
-        </table>
-        </div>
-    </div>`;
+    <div class="tab-content">${filterBar}${grandStats}${projCards}</div>`;
 }
 
 // ══════════════════════════════════════════════════════════
