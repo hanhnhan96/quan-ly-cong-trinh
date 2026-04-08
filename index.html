@@ -1339,72 +1339,65 @@ function renderReportView() {
     </div>`;
 
     const projCards = calcs.map(({p, adv, mat, other, labor, total, profit, paid, wRows}) => {
-        const owed  = Math.max(0, labor - paid);
-        const rev   = p.revenue || 0;
-        return `<div class="card" style="margin-bottom:14px;">
-            <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-                <div>
-                    <div style="font-size:16px;font-weight:800;color:var(--gray-900);">${esc(p.name)}</div>
-                    <div class="fs12 c-gray">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'} · Bắt đầu ${fmtDate(p.startDate)}</div>
+        const owed = Math.max(0, labor - paid);
+        const rev  = p.revenue || 0;
+        const pid  = 'rc-' + p.id;
+        return `<div class="card" style="margin-bottom:8px;padding:0;overflow:hidden;">
+            <!-- Compact header — always visible, click to expand -->
+            <div onclick="toggleReportCard('${p.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:14px;font-weight:700;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.name)}</div>
+                    <div class="fs11 c-gray">${p.status==='active'?'🟢 Đang thi công':'✅ Hoàn thành'} · ${fmtDate(p.startDate)}</div>
                 </div>
-                <button class="btn btn-outline btn-sm" onclick="selectView('${p.id}')">Vào công trình →</button>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div class="fs12 c-gray">Tạm ứng: <span class="fw6 c-green">${fmtMoney(adv)}</span></div>
+                    <div class="fs12">Tổng chi: <span class="fw6">${fmtMoney(total)}</span></div>
+                    <div class="fs12 fw7" style="color:${profit>=0?'var(--success)':'var(--danger)'};">${profit>=0?'Lãi':'Lỗ'} ${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</div>
+                </div>
+                <span id="${pid}-arrow" style="color:var(--gray-400);font-size:12px;flex-shrink:0;">▶</span>
             </div>
-            <!-- Stats -->
-            <div class="stats-grid" style="margin-bottom:12px;">
-                <div class="stat-card" style="padding:10px;">
-                    <div class="stat-label">Giá trị HĐ</div>
-                    <div style="font-size:15px;font-weight:700;color:var(--primary);">${rev?fmtMoney(rev):'–'}</div>
+            <!-- Detail — hidden by default -->
+            <div id="${pid}" style="display:none;border-top:1px solid var(--gray-100);padding:12px 14px;">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+                    <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();selectView('${p.id}')">Vào công trình →</button>
                 </div>
-                <div class="stat-card" style="padding:10px;">
-                    <div class="stat-label">Tạm ứng nhận</div>
-                    <div style="font-size:15px;font-weight:700;color:var(--success);">${fmtMoney(adv)}</div>
-                </div>
-                <div class="stat-card" style="padding:10px;">
-                    <div class="stat-label">Tổng chi</div>
-                    <div style="font-size:15px;font-weight:700;color:var(--danger);">${fmtMoney(total)}</div>
-                </div>
-                <div class="stat-card" style="padding:10px;">
-                    <div class="stat-label">${profit>=0?'💰 Lãi':'📉 Lỗ'}</div>
-                    <div style="font-size:15px;font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'};">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</div>
-                </div>
-            </div>
-            <!-- 2-col detail -->
-            <div class="two-col">
-                <div>
-                    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">BÁO CÁO LÃI/LỖ</div>
-                    <table class="pl-table"><tbody>
-                        <tr><td style="color:var(--success);font-weight:700;">THU</td><td></td></tr>
-                        <tr><td style="padding-left:12px;">Tạm ứng</td><td class="c-green">${fmtMoney(adv)}</td></tr>
-                        <tr><td style="color:var(--danger);font-weight:700;padding-top:8px;">CHI</td><td></td></tr>
-                        <tr><td style="padding-left:12px;">Nhân công</td><td>${fmtMoney(labor)}</td></tr>
-                        <tr><td style="padding-left:24px;" class="fs12 c-gray">Đã trả thợ</td><td class="c-green fs12">-${fmtMoney(paid)}</td></tr>
-                        <tr><td style="padding-left:24px;" class="fs12 c-gray">Còn nợ</td><td class="${owed>0?'c-orange':'c-green'} fs12">${fmtMoney(owed)}</td></tr>
-                        <tr><td style="padding-left:12px;">Vật liệu</td><td>${fmtMoney(mat)}</td></tr>
-                        <tr><td style="padding-left:12px;">Chi phí khác</td><td>${fmtMoney(other)}</td></tr>
-                    </tbody><tfoot><tr>
-                        <td class="fw7">${profit>=0?'💰 Lãi':'📉 Lỗ'}</td>
-                        <td class="${profit>=0?'c-green':'c-red'} fw7">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</td>
-                    </tr></tfoot></table>
-                </div>
-                <div>
-                    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px;">TỪNG THỢ</div>
-                    ${!wRows.length ? `<div class="fs12 c-gray" style="padding:8px 0;">Chưa có dữ liệu chấm công</div>` : `
-                    <table class="data-table">
-                        <thead><tr><th>Thợ</th><th class="tc">Ngày</th><th class="tr">Tiền</th></tr></thead>
-                        <tbody>
-                        ${wRows.map(({w,nd,amt})=>`<tr>
-                            <td><div class="fw6 fs12">${esc(w.name)}</div><div class="fs11 c-gray">${esc(w.role||'')}</div></td>
-                            <td class="tc fw6 fs12">${nd>0?nd+'N':'-'}</td>
-                            <td class="tr fw6 c-blue fs12">${amt>0?fmtMoney(amt):'-'}</td>
-                        </tr>`).join('')}
-                        </tbody>
-                        <tfoot><tr>
-                            <td class="fw7">Tổng</td>
-                            <td class="tc fw7">${wRows.reduce((s,r)=>s+r.nd,0)}N</td>
-                            <td class="tr fw7 c-blue">${fmtMoney(wRows.reduce((s,r)=>s+r.amt,0))}</td>
-                        </tr></tfoot>
-                    </table>`}
+                <div class="two-col">
+                    <div>
+                        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px;letter-spacing:.05em;">BÁO CÁO LÃI/LỖ</div>
+                        <table class="pl-table"><tbody>
+                            <tr><td style="color:var(--success);font-weight:700;">THU</td><td></td></tr>
+                            <tr><td style="padding-left:12px;">Tạm ứng</td><td class="c-green">${fmtMoney(adv)}</td></tr>
+                            ${rev?`<tr><td style="padding-left:12px;font-size:11px;color:var(--gray-400);">Giá trị HĐ</td><td class="fs11 c-gray">${fmtMoney(rev)}</td></tr>`:''}
+                            <tr><td style="color:var(--danger);font-weight:700;padding-top:8px;">CHI</td><td></td></tr>
+                            <tr><td style="padding-left:12px;">Nhân công</td><td>${fmtMoney(labor)}</td></tr>
+                            <tr><td style="padding-left:24px;" class="fs12 c-gray">Đã trả</td><td class="c-green fs12">-${fmtMoney(paid)}</td></tr>
+                            <tr><td style="padding-left:24px;" class="fs12 c-gray">Còn nợ</td><td class="${owed>0?'c-orange':'c-green'} fs12">${fmtMoney(owed)}</td></tr>
+                            <tr><td style="padding-left:12px;">Vật liệu</td><td>${fmtMoney(mat)}</td></tr>
+                            <tr><td style="padding-left:12px;">Chi khác</td><td>${fmtMoney(other)}</td></tr>
+                        </tbody><tfoot><tr>
+                            <td class="fw7">${profit>=0?'💰 Lãi':'📉 Lỗ'}</td>
+                            <td class="${profit>=0?'c-green':'c-red'} fw7">${profit<0?'-':''}${fmtMoney(Math.abs(profit))}</td>
+                        </tr></tfoot></table>
+                    </div>
+                    <div>
+                        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px;letter-spacing:.05em;">TỪNG THỢ</div>
+                        ${!wRows.length ? `<div class="fs12 c-gray">Chưa có dữ liệu</div>` : `
+                        <table class="data-table">
+                            <thead><tr><th>Thợ</th><th class="tc">Ngày</th><th class="tr">Tiền</th></tr></thead>
+                            <tbody>
+                            ${wRows.map(({w,nd,amt})=>`<tr>
+                                <td><div class="fw6 fs12">${esc(w.name)}</div></td>
+                                <td class="tc fs12">${nd>0?nd+'N':'-'}</td>
+                                <td class="tr fw6 c-blue fs12">${fmtMoney(amt)}</td>
+                            </tr>`).join('')}
+                            </tbody>
+                            <tfoot><tr>
+                                <td class="fw7">Tổng</td>
+                                <td class="tc fw7">${wRows.reduce((s,r)=>s+r.nd,0)}N</td>
+                                <td class="tr fw7 c-blue">${fmtMoney(wRows.reduce((s,r)=>s+r.amt,0))}</td>
+                            </tr></tfoot>
+                        </table>`}
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -2583,6 +2576,15 @@ function toggleExtraWorkerDay(projId, date, workerId) {
     save();
     document.getElementById('modal-content').innerHTML = modalContent();
     renderMain();
+}
+
+function toggleReportCard(projId) {
+    const detail = document.getElementById('rc-' + projId);
+    const arrow  = document.getElementById('rc-' + projId + '-arrow');
+    if (!detail) return;
+    const open = detail.style.display === 'none';
+    detail.style.display = open ? '' : 'none';
+    if (arrow) arrow.textContent = open ? '▼' : '▶';
 }
 
 function editWorkerAdvance(projId, workerId, weekStart) {
