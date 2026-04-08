@@ -248,11 +248,11 @@
         .att-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--gray-200); -webkit-overflow-scrolling: touch; }
         .att-table { width: 100%; border-collapse: collapse; background: white; min-width: 560px; }
         .att-table th { background: var(--gray-50); padding: 5px 3px; font-size: 10px; font-weight: 600; text-align: center; border-bottom: 1px solid var(--gray-200); color: var(--gray-500); white-space: nowrap; }
-        .att-table th.col-name { text-align: left; min-width: 120px; padding-left: 10px; }
+        .att-table th.col-name { text-align: left; min-width: 120px; padding-left: 10px; position: sticky; left: 0; z-index: 3; background: var(--gray-50); }
         .att-table th.col-sun  { color: var(--purple); background: var(--purple-light); }
         .att-table th.today-col { background: #eff6ff; }
         .att-table td { padding: 4px 3px; text-align: center; border-bottom: 1px solid var(--gray-100); font-size: 12px; }
-        .att-table td.col-name { text-align: left; padding-left: 12px; }
+        .att-table td.col-name { text-align: left; padding-left: 12px; position: sticky; left: 0; z-index: 2; background: white; }
         .att-table tbody tr:last-child td { border-bottom: none; }
         .att-table td.today-cell { background: #f8faff; }
         .att-cell {
@@ -269,6 +269,8 @@
         .att-cell.v2  { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; font-size: 9px; }
         .att-cell.v0  { background: white; border-color: var(--gray-200); color: var(--gray-300); }
         .att-table tfoot tr td { background: var(--gray-50); font-weight: 700; border-top: 2px solid var(--gray-200); border-bottom: none; font-size: 12px; padding: 9px 6px; }
+        .att-table tfoot td.col-name { background: var(--gray-50); }
+        .att-table th.col-name, .att-table td.col-name { box-shadow: 2px 0 5px rgba(0,0,0,0.06); }
 
         /* ===== WEEK NAV ===== */
         .week-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
