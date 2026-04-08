@@ -1489,15 +1489,17 @@ function renderExpenses(p) {
         </div>
         ${!exps.length ? `<div class="empty"><div class="empty-icon">📋</div><div class="empty-desc">Chưa có chi phí nào</div></div>` : `
         <table class="data-table">
-            <thead><tr><th>Ngày</th><th>Loại</th><th>Mô tả</th><th>Người chi</th><th class="tr">Số tiền</th><th style="width:36px;"></th></tr></thead>
+            <thead><tr><th>Ngày</th><th>Loại</th><th>Người chi</th><th>Mô tả</th><th class="tr">Số tiền</th><th style="width:72px;"></th></tr></thead>
             <tbody>
             ${exps.map(e=>`<tr>
                 <td class="fs12 c-gray">${fmtDate(e.date)}</td>
                 <td><span class="tag tag-${e.type}">${e.type==='material'?'🧱 Vật liệu':'📦 Khác'}</span></td>
+                <td class="fs12 fw6" style="color:var(--gray-700);">${esc(e.payer||'-')}</td>
                 <td style="font-size:13px;">${esc(e.desc||'-')}</td>
-                <td class="fs12" style="color:var(--gray-600);">${esc(e.payer||'-')}</td>
                 <td class="tr fw6 fs12">${fmtMoney(e.amount)}</td>
-                <td>${p.status==='active'?`<button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')">🗑️</button>`:''}</td>
+                <td style="white-space:nowrap;">${p.status==='active'?`
+                    <button class="btn btn-ghost btn-xs" onclick="editExpense('${p.id}','${e.id}')" title="Sửa">✏️</button>
+                    <button class="btn btn-ghost btn-xs" onclick="deleteExpense('${p.id}','${e.id}')" title="Xóa">🗑️</button>`:''}</td>
             </tr>`).join('')}
             </tbody>
             <tfoot><tr>
@@ -1647,6 +1649,7 @@ function modalContent() {
         case 'raise-wage':     return mRaiseWage();
         case 'assign-workers': return mAssignWorkers();
         case 'add-expense':    return mAddExpense();
+        case 'edit-expense':   return mEditExpense(arg);
         case 'add-advance':    return mAddAdvance();
         case 'payment':        return mPayment();
         case 'set-revenue':    return mSetRevenue();
@@ -1923,12 +1926,12 @@ function mAddExpense() {
         </select>
     </div>
     <div class="form-group">
-        <label class="form-label">Mô tả</label>
-        <input class="form-input" id="m-desc" placeholder="Xi măng, sắt, xăng xe...">
-    </div>
-    <div class="form-group">
         <label class="form-label">Người chi</label>
         <input class="form-input" id="m-payer" placeholder="Nguyên, Văn, chủ nhà...">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Mô tả</label>
+        <input class="form-input" id="m-desc" placeholder="Xi măng, sắt, xăng xe...">
     </div>
     <div class="form-group">
         <label class="form-label">Số tiền (₫) *</label>
@@ -1945,6 +1948,59 @@ function doAddExpense() {
     if (!amount) { alert('Nhập số tiền'); return; }
     if (!cur().expenses) cur().expenses = [];
     cur().expenses.push({ id:uid(), date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), payer:$v('m-payer').trim(), amount });
+    save(); closeModal(); renderAll();
+}
+
+function editExpense(projId, expId) {
+    openModal('edit-expense', projId + '|' + expId);
+}
+
+function mEditExpense(arg) {
+    const [projId, expId] = (arg||'').split('|');
+    const p = S.projects.find(x=>x.id===projId);
+    const e = (p?.expenses||[]).find(x=>x.id===expId);
+    if (!e) return '<div class="modal-title">Không tìm thấy</div>';
+    return `<div class="modal-title">✏️ Sửa chi phí</div>
+    <input type="hidden" id="m-proj-id" value="${esc(projId)}">
+    <input type="hidden" id="m-exp-id" value="${esc(expId)}">
+    <div class="form-group">
+        <label class="form-label">Ngày</label>
+        <input type="date" class="form-input" id="m-date" value="${e.date||''}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Loại chi phí</label>
+        <select class="form-select" id="m-type">
+            <option value="material" ${e.type==='material'?'selected':''}>🧱 Vật liệu / Mua hàng</option>
+            <option value="other" ${e.type==='other'?'selected':''}>📦 Chi phí khác (xăng, ăn, thiết bị...)</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Người chi</label>
+        <input class="form-input" id="m-payer" placeholder="Nguyên, Văn, chủ nhà..." value="${esc(e.payer||'')}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Mô tả</label>
+        <input class="form-input" id="m-desc" placeholder="Xi măng, sắt, xăng xe..." value="${esc(e.desc||'')}">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Số tiền (₫) *</label>
+        <input type="number" class="form-input" id="m-amount" placeholder="0" min="0" inputmode="numeric" value="${e.amount||''}">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+        <button class="btn btn-primary" onclick="doEditExpense()">💾 Lưu</button>
+    </div>`;
+}
+
+function doEditExpense() {
+    const amount = $f('m-amount');
+    if (!amount) { alert('Nhập số tiền'); return; }
+    const projId = $v('m-proj-id');
+    const expId  = $v('m-exp-id');
+    const p = S.projects.find(x=>x.id===projId);
+    const i = (p?.expenses||[]).findIndex(x=>x.id===expId);
+    if (i < 0) return;
+    p.expenses[i] = { ...p.expenses[i], date:$v('m-date'), type:$v('m-type'), desc:$v('m-desc').trim(), payer:$v('m-payer').trim(), amount };
     save(); closeModal(); renderAll();
 }
 
