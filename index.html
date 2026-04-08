@@ -536,14 +536,14 @@
 
         <!-- Global views -->
         <div class="sidebar-views">
-            <div class="view-item" id="vi-workers" onclick="selectView('workers')">
-                <span class="view-item-icon">👷</span> Danh sách thợ
+            <div class="view-item" id="vi-report" onclick="selectView('report')">
+                <span class="view-item-icon">📈</span> Báo cáo công trình
             </div>
             <div class="view-item" id="vi-summary" onclick="selectView('summary')">
                 <span class="view-item-icon">📊</span> Tổng lương tuần
             </div>
-            <div class="view-item" id="vi-report" onclick="selectView('report')">
-                <span class="view-item-icon">📈</span> Báo cáo công trình
+            <div class="view-item" id="vi-workers" onclick="selectView('workers')">
+                <span class="view-item-icon">👷</span> Danh sách thợ
             </div>
         </div>
 
@@ -1078,6 +1078,12 @@ function weekDailyExtras(p, days) {
         return s + getExtraWorkersDay(p, ds).reduce((ss,e)=>ss+(e.amount||0),0);
     }, 0);
 }
+function weekExtraDaysAll(p, days) {
+    return days.reduce((s,d) => {
+        const ds = toYMD(d);
+        return s + (p.extraWorkerDays||[]).filter(e=>e.date===ds).reduce((ss,e)=>ss+(e.value??1),0);
+    }, 0);
+}
 function getWeeklyExtraWorkers(p, weekStart) {
     return (p.weeklyExtraWorkers||[]).filter(e => e.weekStart === weekStart);
 }
@@ -1357,44 +1363,52 @@ function renderSummaryView() {
             <div class="stat-card"><div class="stat-label">Tổng lương tuần</div><div class="stat-value negative">${fmtMoney(grandAmount)}</div></div>
         </div>
 
+        <!-- Tổng theo công trình -->
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+            <div style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--gray-500);background:var(--gray-50);border-bottom:1px solid var(--gray-200);letter-spacing:.04em;">
+                TỔNG THEO CÔNG TRÌNH
+            </div>
+            ${activeProjs.map(p => {
+                const pDays   = projWorkersForWeek(p, toYMD(sunday)).reduce((s,w)=>s+weekDaysWorker(p,w,days),0)
+                              + weekExtraDaysAll(p, days);
+                const pMoney  = projWorkersForWeek(p, toYMD(sunday)).reduce((s,w)=>s+weekLaborWorker(p,w,days),0)
+                              + weekDailyExtras(p, days);
+                const pWorkers = rows.filter(r=>r.projData.some(x=>x.proj.id===p.id)).length;
+                if (!pDays && !pMoney) return '';
+                return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;" onclick="selectView('${p.id}')">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}</div>
+                        <div class="fs11 c-gray">${pWorkers} thợ · ${pDays}N công</div>
+                    </div>
+                    <div style="font-size:14px;font-weight:700;color:var(--primary);flex-shrink:0;">${fmtMoney(pMoney)}</div>
+                </div>`;
+            }).join('')}
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;background:var(--gray-50);border-top:2px solid var(--gray-200);font-weight:700;font-size:13px;">
+                <span>Tổng</span><span style="color:var(--danger);">${fmtMoney(grandAmount)}</span>
+            </div>
+        </div>
+
+        <!-- Tổng theo thợ -->
         <div class="card" style="padding:0;overflow:hidden;">
-            <div class="sum-table-wrap">
-            <table class="sum-table">
-                <thead><tr>
-                    <th class="th-worker">Thợ</th>
-                    <th style="text-align:center;min-width:60px;">Ngày</th>
-                    <th style="text-align:right;min-width:120px;">Tiền tuần</th>
-                </tr></thead>
-                <tbody>
-                ${rows.map(row => `
-                <tr>
-                    <td>
-                        <div class="sum-worker-row">
-                            <div class="sum-worker-name">${esc(row.w.name)}</div>
-                            <div class="fs11 c-gray">${esc(row.w.role||'Thợ')}</div>
-                        </div>
-                        <div class="sum-proj-list">
-                        ${row.projData.map(x=>`
-                            <div class="sum-proj-row">
-                                <span class="c-gray">${esc(x.proj.name)}</span>
-                                <span>${x.days}N · <span class="fw6 c-blue">${fmtMoney(x.amount)}</span></span>
-                            </div>`).join('')}
-                        </div>
-                    </td>
-                    <td style="text-align:center;vertical-align:middle;padding:10px;">
-                        <div class="fw7" style="font-size:14px;">${row.totalDays}N</div>
-                    </td>
-                    <td style="text-align:right;vertical-align:middle;padding:10px;">
-                        <div class="fw7 c-blue" style="font-size:14px;">${fmtMoney(row.totalAmount)}</div>
-                    </td>
-                </tr>`).join('')}
-                </tbody>
-                <tfoot><tr>
-                    <td class="fw7">Tổng cộng</td>
-                    <td class="tc fw7">${grandDays}N</td>
-                    <td class="tr fw7 c-red">${fmtMoney(grandAmount)}</td>
-                </tr></tfoot>
-            </table>
+            <div style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--gray-500);background:var(--gray-50);border-bottom:1px solid var(--gray-200);letter-spacing:.04em;">
+                TỔNG THEO THỢ
+            </div>
+            ${rows.map(row => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--gray-100);">
+                <div style="width:34px;height:34px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0;">${initials(row.w.name)}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:700;">${esc(row.w.name)}</div>
+                    <div class="fs11 c-gray">
+                        ${row.projData.map(x=>`${esc(x.proj.name)}: ${x.days}N`).join(' · ')}
+                    </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:14px;font-weight:700;color:var(--primary);">${fmtMoney(row.totalAmount)}</div>
+                    <div class="fs11 c-gray">${row.totalDays}N</div>
+                </div>
+            </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;background:var(--gray-50);border-top:2px solid var(--gray-200);font-weight:700;font-size:13px;">
+                <span>Tổng · ${grandDays}N</span><span style="color:var(--danger);">${fmtMoney(grandAmount)}</span>
             </div>
         </div>`}
     </div>`;
