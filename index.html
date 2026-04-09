@@ -429,8 +429,9 @@
             .att-cell { width: 32px; height: 30px; font-size: 9px; }
             .att-table-wrap { padding-bottom: 76px; }
             .mobile-nav { display: flex !important; }
-            /* Hide desktop tab bar on mobile — bottom nav replaces it */
-            .tabs-bar { display: none; }
+            /* Compact tab bar on mobile — bottom nav handles main 3, tabs-bar handles all */
+            .tabs-bar { overflow-x: auto; }
+            .tab { padding: 8px 10px; font-size: 12px; }
         }
         @media (min-width: 701px) {
             .topbar { display: none !important; }
