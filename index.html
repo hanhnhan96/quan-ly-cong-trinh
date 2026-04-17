@@ -2994,72 +2994,57 @@ load();
 //  FLOOR PLAN GENERATOR
 // ══════════════════════════════════════════════════════════
 
+// ========== FLOOR PLAN ==========
 function renderFloorPlanView() {
-    if (!S.fp) S.fp = { w:5, l:15, beds:3, baths:2, living:true, kitchen:true, altar:false, garage:false };
+    if (!S.fp) S.fp = {};
+    const D = {
+        w:5, l:15, numFloors:2, floorH:3.3, groundH:3.6,
+        beds:3, baths:2, masterBed:false,
+        living:true, kitchen:true, dining:false, altar:false, garage:false,
+        laundry:false, maidRoom:false, balcony:false, rooftop:false,
+        facing:'south', mainDoor:'front', alley:'none', neighbor:'both',
+        stairType:'straight', stairPos:'middle',
+        style:'modern', roofType:'flat', exteriorColor:'#f5f0e8', material:'paint',
+        garden:false, fence:false, furniture:true,
+    };
+    Object.keys(D).forEach(k => { if (S.fp[k] === undefined) S.fp[k] = D[k]; });
+    if (!S.fpTab) S.fpTab = 'size';
     const fp = S.fp;
+    const area = (fp.w * fp.l).toFixed(1);
+    const totalArea = (fp.w * fp.l * fp.numFloors).toFixed(1);
+    const tabs = [
+        {k:'size',   icon:'📐', label:'Kích thước'},
+        {k:'rooms',  icon:'🛏️', label:'Phòng'},
+        {k:'orient', icon:'🧭', label:'Hướng'},
+        {k:'style',  icon:'🎨', label:'Phong cách'},
+        {k:'3d',     icon:'📦', label:'3D'},
+    ];
     return `
     <div class="main-header">
-        <div><div class="main-title">🏠 Phác thảo sơ đồ nhà</div>
-        <div class="main-meta">Nhập thông số — sơ đồ tự động cập nhật</div></div>
+        <div>
+            <div class="main-title">🏠 Phác thảo sơ đồ nhà</div>
+            <div class="main-meta">${area} m²/sàn • Tổng ${totalArea} m² • Sơ đồ tự động cập nhật</div>
+        </div>
+        <button onclick="fpDownload()" class="btn btn-outline" style="font-size:13px;white-space:nowrap;">⬇ Tải SVG</button>
     </div>
     <div class="tab-content">
         <div class="two-col" style="align-items:start;">
 
-        <!-- FORM -->
-        <div class="card">
-            <div class="card-header"><span class="card-title">📐 Thông số nhà</span></div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-                <div class="form-group" style="margin:0;">
-                    <label class="form-label">Chiều rộng (m)</label>
-                    <input type="number" class="form-input" id="fp-w" value="${fp.w}" min="3" max="20" step="0.5"
-                        oninput="S.fp.w=+this.value||5;fpRedraw()">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label class="form-label">Chiều dài (m)</label>
-                    <input type="number" class="form-input" id="fp-l" value="${fp.l}" min="5" max="60" step="0.5"
-                        oninput="S.fp.l=+this.value||10;fpRedraw()">
-                </div>
+        <!-- FORM PANEL -->
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="display:flex;overflow-x:auto;border-bottom:1px solid var(--gray-200);background:var(--gray-50);scrollbar-width:none;">
+                ${tabs.map(t => `
+                <button onclick="S.fpTab='${t.k}';fpFormUpdate()"
+                    style="flex:1;min-width:62px;padding:10px 4px 8px;border:none;
+                    border-bottom:2px solid ${S.fpTab===t.k?'var(--primary)':'transparent'};
+                    background:${S.fpTab===t.k?'white':'transparent'};
+                    color:${S.fpTab===t.k?'var(--primary)':'var(--gray-500)'};
+                    font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;line-height:1.6;">
+                    <div style="font-size:16px;">${t.icon}</div>${t.label}
+                </button>`).join('')}
             </div>
-
-            <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;font-weight:600;">SỐ PHÒNG</div>
-            ${[
-                ['beds',  'Phòng ngủ',  '🛏️', 0, 8],
-                ['baths', 'Toilet/WC',  '🚿', 1, 6],
-            ].map(([key, label, icon, min, max]) => `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);">
-                <span style="font-size:13px;">${icon} ${label}</span>
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <button onclick="S.fp.${key}=Math.max(${min},S.fp.${key}-1);fpRedraw()"
-                        style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--gray-300);background:white;font-size:16px;cursor:pointer;line-height:1;">−</button>
-                    <span style="font-size:15px;font-weight:700;min-width:20px;text-align:center;">${fp[key]}</span>
-                    <button onclick="S.fp.${key}=Math.min(${max},S.fp.${key}+1);fpRedraw()"
-                        style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--primary);background:var(--primary);color:white;font-size:16px;cursor:pointer;line-height:1;">+</button>
-                </div>
-            </div>`).join('')}
-
-            <div style="font-size:12px;color:var(--gray-500);margin:12px 0 8px;font-weight:600;">KHÔNG GIAN</div>
-            ${[
-                ['living',  '🛋️ Phòng khách'],
-                ['kitchen', '🍳 Bếp + phòng ăn'],
-                ['altar',   '🕯️ Phòng thờ'],
-                ['garage',  '🚗 Gara / sân để xe'],
-            ].map(([key, label]) => `
-            <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
-                <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
-                    style="width:16px;height:16px;accent-color:var(--primary);">
-                <span style="font-size:13px;">${label}</span>
-            </label>`).join('')}
-
-            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--gray-200);">
-                <div style="font-size:11px;color:var(--gray-400);margin-bottom:6px;">
-                    Diện tích: <strong>${(fp.w*fp.l).toFixed(1)} m²</strong>
-                </div>
-                <button onclick="fpDownload()"
-                    style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--primary);
-                           background:white;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;">
-                    ⬇ Tải sơ đồ (SVG)
-                </button>
+            <div id="fp-form-inner" style="padding:14px;">
+                ${fpFormInner(fp)}
             </div>
         </div>
 
@@ -3072,66 +3057,348 @@ function renderFloorPlanView() {
     </div>`;
 }
 
+function fpFormInner(fp) {
+    const t = S.fpTab || 'size';
+
+    // ── TAB 1: KÍCH THƯỚC ──
+    if (t === 'size') return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">KÍCH THƯỚC TỔNG THỂ</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Chiều rộng (m)</label>
+                <input type="number" class="form-input" value="${fp.w}" min="3" max="20" step="0.5"
+                    oninput="S.fp.w=+this.value||5;fpRedraw()">
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Chiều dài (m)</label>
+                <input type="number" class="form-input" value="${fp.l}" min="5" max="60" step="0.5"
+                    oninput="S.fp.l=+this.value||10;fpRedraw()">
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Số tầng</label>
+                <input type="number" class="form-input" value="${fp.numFloors}" min="1" max="6" step="1"
+                    oninput="S.fp.numFloors=Math.max(1,Math.min(6,+this.value||2));fpRedraw()">
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Cao tầng trệt (m)</label>
+                <input type="number" class="form-input" value="${fp.groundH}" min="2.8" max="5" step="0.1"
+                    oninput="S.fp.groundH=+this.value||3.6;fpRedraw()">
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label class="form-label">Cao tầng lầu (m)</label>
+                <input type="number" class="form-input" value="${fp.floorH}" min="2.5" max="4.5" step="0.1"
+                    oninput="S.fp.floorH=+this.value||3.3;fpRedraw()">
+            </div>
+        </div>
+        <div style="padding:10px 12px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-600);line-height:1.9;border:1px solid var(--gray-200);">
+            📐 Diện tích mỗi sàn: <strong>${(fp.w*fp.l).toFixed(1)} m²</strong><br>
+            🏗️ Tổng diện tích: <strong>${(fp.w*fp.l*fp.numFloors).toFixed(1)} m²</strong><br>
+            📏 Tổng chiều cao: <strong>${(fp.groundH + Math.max(0,fp.numFloors-1)*fp.floorH).toFixed(1)} m</strong>
+        </div>
+    `;
+
+    // ── TAB 2: PHÒNG ──
+    if (t === 'rooms') return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">SỐ PHÒNG</div>
+        ${[['beds','Phòng ngủ','🛏️',0,8],['baths','Toilet / WC','🚿',1,6]].map(([key,label,icon,min,max]) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);">
+            <span style="font-size:13px;">${icon} ${label}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="S.fp.${key}=Math.max(${min},S.fp.${key}-1);fpRedraw()"
+                    style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--gray-300);background:white;font-size:16px;cursor:pointer;">−</button>
+                <span style="font-size:15px;font-weight:700;min-width:22px;text-align:center;">${fp[key]}</span>
+                <button onclick="S.fp.${key}=Math.min(${max},S.fp.${key}+1);fpRedraw()"
+                    style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--primary);background:var(--primary);color:white;font-size:16px;cursor:pointer;">+</button>
+            </div>
+        </div>`).join('')}
+
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin:14px 0 8px;letter-spacing:.08em;">TẦNG TRỆT</div>
+        ${[['living','🛋️ Phòng khách'],['kitchen','🍳 Bếp + phòng ăn'],['dining','🪑 Phòng ăn riêng'],
+           ['altar','🕯️ Phòng thờ'],['garage','🚗 Gara / sân để xe'],['maidRoom','🧹 Phòng giúp việc']].map(([key,label]) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+                style="width:16px;height:16px;accent-color:var(--primary);">
+            <span style="font-size:13px;">${label}</span>
+        </label>`).join('')}
+
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin:14px 0 8px;letter-spacing:.08em;">TẦNG LẦU & SÂN THƯỢNG</div>
+        ${[['masterBed','👑 Phòng ngủ master (có toilet riêng)'],['balcony','🌿 Ban công'],
+           ['laundry','🪣 Phòng giặt / phơi'],['rooftop','☀️ Sân thượng sử dụng được']].map(([key,label]) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+                style="width:16px;height:16px;accent-color:var(--primary);">
+            <span style="font-size:13px;">${label}</span>
+        </label>`).join('')}
+    `;
+
+    // ── TAB 3: HƯỚNG & CỬA ──
+    if (t === 'orient') return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">HƯỚNG NHÀ</div>
+        <div class="form-group">
+            <label class="form-label">Hướng mặt tiền</label>
+            <select class="form-input" onchange="S.fp.facing=this.value;fpRedraw()">
+                ${[['south','Nam ↓ (tốt nhất)'],['north','Bắc ↑'],['east','Đông →'],['west','Tây ←'],
+                   ['southeast','Đông Nam ↘'],['southwest','Tây Nam ↙'],['northeast','Đông Bắc ↗'],['northwest','Tây Bắc ↖']]
+                .map(([v,l]) => `<option value="${v}" ${fp.facing===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Vị trí cửa chính</label>
+            <select class="form-input" onchange="S.fp.mainDoor=this.value;fpRedraw()">
+                ${[['front','Mặt trước'],['back','Mặt sau'],['left','Bên hông trái'],['right','Bên hông phải']]
+                .map(([v,l]) => `<option value="${v}" ${fp.mainDoor===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin:14px 0 10px;letter-spacing:.08em;">CẦU THANG</div>
+        <div class="form-group">
+            <label class="form-label">Kiểu cầu thang</label>
+            <select class="form-input" onchange="S.fp.stairType=this.value;fpRedraw()">
+                ${[['straight','Thẳng'],['L','Chữ L'],['U','Chữ U'],['spiral','Xoắn ốc']]
+                .map(([v,l]) => `<option value="${v}" ${fp.stairType===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Vị trí cầu thang</label>
+            <select class="form-input" onchange="S.fp.stairPos=this.value;fpRedraw()">
+                ${[['front','Phía trước'],['middle','Giữa nhà'],['back','Phía sau']]
+                .map(([v,l]) => `<option value="${v}" ${fp.stairPos===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin:14px 0 10px;letter-spacing:.08em;">TIẾP GIÁP HÀNG XÓM</div>
+        <div class="form-group">
+            <label class="form-label">Tường chung với hàng xóm</label>
+            <select class="form-input" onchange="S.fp.neighbor=this.value;fpRedraw()">
+                ${[['both','Cả hai bên'],['left','Bên trái'],['right','Bên phải'],['none','Không có (nhà độc lập)']]
+                .map(([v,l]) => `<option value="${v}" ${fp.neighbor===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Hẻm / ngõ phụ</label>
+            <select class="form-input" onchange="S.fp.alley=this.value;fpRedraw()">
+                ${[['none','Không có'],['left','Bên hông trái'],['right','Bên hông phải'],['both','Cả hai bên']]
+                .map(([v,l]) => `<option value="${v}" ${fp.alley===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+    `;
+
+    // ── TAB 4: PHONG CÁCH ──
+    if (t === 'style') return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">PHONG CÁCH KIẾN TRÚC</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+            ${[['modern','🏢 Hiện đại'],['classic','🏛️ Cổ điển'],['neoclassic','✨ Tân cổ điển'],
+               ['garden','🌳 Nhà vườn'],['minimal','⬜ Tối giản'],['industrial','🔩 Industrial']]
+            .map(([v,l]) => `
+            <button onclick="S.fp.style='${v}';fpFormUpdate();fpRedraw()"
+                style="padding:10px 6px;border-radius:8px;
+                border:2px solid ${fp.style===v?'var(--primary)':'var(--gray-200)'};
+                background:${fp.style===v?'var(--primary-light)':'white'};
+                color:${fp.style===v?'var(--primary)':'var(--gray-700)'};
+                font-size:12px;font-weight:600;cursor:pointer;text-align:left;line-height:1.5;">
+                ${l}
+            </button>`).join('')}
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Loại mái</label>
+            <select class="form-input" onchange="S.fp.roofType=this.value;fpRedraw()">
+                ${[['flat','Mái bằng'],['slope','Mái dốc 1 phía'],['gable','Mái tam giác (2 phía)'],['hip','Mái 4 phía']]
+                .map(([v,l]) => `<option value="${v}" ${fp.roofType===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Màu tường ngoài</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                <input type="color" value="${fp.exteriorColor}" onchange="S.fp.exteriorColor=this.value;fpRedraw()"
+                    style="width:40px;height:36px;border:none;cursor:pointer;border-radius:6px;padding:2px;">
+                <input type="text" class="form-input" value="${fp.exteriorColor}" style="flex:1;font-family:monospace;"
+                    oninput="S.fp.exteriorColor=this.value;fpRedraw()">
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${['#f5f0e8','#ffffff','#e8e0d0','#d4c5a9','#e8f0e8','#d0e0d0','#e0e8f0','#fff8e1','#fce4d6']
+                .map(c => `<button onclick="S.fp.exteriorColor='${c}';fpFormUpdate();fpRedraw()"
+                    title="${c}"
+                    style="width:28px;height:28px;border-radius:50%;background:${c};
+                    border:2px solid ${fp.exteriorColor===c?'var(--primary)':'var(--gray-300)'};cursor:pointer;"></button>`).join('')}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Vật liệu ngoài nhà</label>
+            <select class="form-input" onchange="S.fp.material=this.value;fpRedraw()">
+                ${[['paint','Sơn'],['tile','Gạch ốp lát'],['stone','Đá tự nhiên'],
+                   ['wood','Gỗ ốp'],['glass','Kính cường lực'],['concrete','Bê tông lộ mặt']]
+                .map(([v,l]) => `<option value="${v}" ${fp.material===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+        </div>
+    `;
+
+    // ── TAB 5: 3D ──
+    if (t === '3d') return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">CHI TIẾT HIỂN THỊ</div>
+        ${[['furniture','🪑 Hiển thị nội thất cơ bản'],['garden','🌿 Sân vườn / tiểu cảnh'],['fence','🧱 Cổng & tường rào']].map(([key,label]) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+                style="width:16px;height:16px;accent-color:var(--primary);">
+            <span style="font-size:13px;">${label}</span>
+        </label>`).join('')}
+
+        <div style="margin-top:14px;padding:12px;background:var(--primary-light);border-radius:8px;font-size:12px;color:var(--primary);border:1px solid #bfdbfe;">
+            <div style="font-weight:700;margin-bottom:6px;">🖥️ Phần mềm vẽ 3D từ SVG này</div>
+            <ul style="margin:0 0 0 16px;line-height:2;">
+                <li><strong>Sweet Home 3D</strong> — miễn phí, dễ dùng nhất</li>
+                <li><strong>SketchUp Free</strong> — web, chuyên nghiệp</li>
+                <li><strong>Planner 5D</strong> — mobile & web</li>
+                <li><strong>Floorplanner.com</strong> — trực tuyến, nhanh</li>
+            </ul>
+            <div style="margin-top:6px;font-size:11px;opacity:.8;">Dùng bảng kích thước phòng dưới đây để nhập vào phần mềm 3D.</div>
+        </div>
+
+        <div style="margin-top:14px;" id="fp-dim-table">
+            ${fpDimTable(fp)}
+        </div>
+
+        <button onclick="fpDownload()" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;
+            border:1.5px solid var(--primary);background:white;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;">
+            ⬇ Tải sơ đồ SVG
+        </button>
+    `;
+    return '';
+}
+
+function fpDimTable(fp) {
+    const rooms = fpAllRoomsList(fp);
+    if (!rooms.length) return '';
+    return `
+    <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px;letter-spacing:.08em;">BẢNG KÍCH THƯỚC PHÒNG (tham khảo)</div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="background:var(--gray-50);">
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--gray-200);">Phòng</th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-200);">Rộng</th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-200);">Dài</th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-200);">Cao</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--gray-200);">m²</th>
+        </tr></thead>
+        <tbody>
+        ${rooms.map((r,i) => `
+        <tr style="border-bottom:1px solid var(--gray-100);background:${i%2?'var(--gray-50)':'white'};">
+            <td style="padding:5px 8px;">${r.icon} ${r.name}</td>
+            <td style="padding:5px 8px;text-align:center;">${r.dimW}m</td>
+            <td style="padding:5px 8px;text-align:center;">${r.dimL}m</td>
+            <td style="padding:5px 8px;text-align:center;">${r.dimH}m</td>
+            <td style="padding:5px 8px;text-align:right;font-weight:600;">${(r.dimW*r.dimL).toFixed(1)}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--gray-100);font-weight:700;">
+            <td style="padding:6px 8px;" colspan="4">Tổng diện tích sử dụng</td>
+            <td style="padding:6px 8px;text-align:right;">${rooms.reduce((s,r)=>s+r.dimW*r.dimL,0).toFixed(1)}</td>
+        </tr>
+        </tbody>
+    </table></div>`;
+}
+
+function fpAllRoomsList(fp) {
+    const { w, l, numFloors, groundH, floorH, beds, baths, living, kitchen, dining, altar, garage,
+            masterBed, balcony, laundry, maidRoom, rooftop } = fp;
+    const rooms = [];
+    if (garage)   rooms.push({name:'Gara',              icon:'🚗', dimW:w,               dimL:3.5, dimH:groundH});
+    if (living)   rooms.push({name:'Phòng khách',       icon:'🛋️', dimW:w,               dimL:4.0, dimH:groundH});
+    if (kitchen)  rooms.push({name:'Bếp + phòng ăn',   icon:'🍳', dimW:w,               dimL:3.5, dimH:groundH});
+    if (dining && !kitchen) rooms.push({name:'Phòng ăn',icon:'🪑', dimW:Math.round(w*.6*10)/10, dimL:3.0, dimH:groundH});
+    if (altar)    rooms.push({name:'Phòng thờ',         icon:'🕯️', dimW:Math.min(w,3.0), dimL:2.5, dimH:groundH});
+    if (maidRoom) rooms.push({name:'Phòng giúp việc',   icon:'🧹', dimW:2.5,             dimL:2.5, dimH:groundH});
+    if (baths>=1) rooms.push({name:'WC tầng trệt',      icon:'🚿', dimW:1.8,             dimL:2.5, dimH:groundH});
+    if (masterBed && beds>0) {
+        rooms.push({name:'Phòng ngủ master',icon:'👑', dimW:w,    dimL:4.0, dimH:floorH});
+        rooms.push({name:'Toilet master',   icon:'🚿', dimW:2.0,  dimL:2.5, dimH:floorH});
+    }
+    const startBed = masterBed && beds>0 ? 1 : 0;
+    for (let i=startBed; i<beds; i++) {
+        rooms.push({name:`Phòng ngủ ${i+1}`, icon:'🛏️', dimW:Math.min(w,3.5), dimL:3.5, dimH:floorH});
+    }
+    for (let i=1; i<baths; i++) rooms.push({name:`Toilet ${i+1}`, icon:'🚿', dimW:1.8, dimL:2.5, dimH:floorH});
+    if (balcony)  rooms.push({name:'Ban công',   icon:'🌿', dimW:w,   dimL:1.5, dimH:floorH});
+    if (laundry)  rooms.push({name:'Phòng giặt', icon:'🪣', dimW:2.0, dimL:2.0, dimH:floorH});
+    if (rooftop)  rooms.push({name:'Sân thượng', icon:'☀️', dimW:w,   dimL:Math.round(l/numFloors*10)/10, dimH:0});
+    return rooms;
+}
+
+function fpFormUpdate() {
+    const inner = document.getElementById('fp-form-inner');
+    if (inner) inner.innerHTML = fpFormInner(S.fp);
+}
+
 function fpRedraw() {
     const el = document.getElementById('fp-output');
     if (el) el.innerHTML = genFloorPlanSVG(S.fp);
+    const dt = document.getElementById('fp-dim-table');
+    if (dt) dt.innerHTML = fpDimTable(S.fp);
 }
 
 function fpDownload() {
-    const svg = document.querySelector('#fp-output svg');
-    if (!svg) return;
-    const blob = new Blob([svg.outerHTML], {type:'image/svg+xml'});
+    const svgs = document.querySelectorAll('#fp-output svg');
+    if (!svgs.length) return;
+    // Combine all floor SVGs into one file
+    const allSVG = Array.from(svgs).map(s => s.outerHTML).join('\n');
+    const blob = new Blob([allSVG], {type:'image/svg+xml'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'so-do-nha.svg';
+    a.download = `so-do-nha-${S.fp.w}x${S.fp.l}m.svg`;
     a.click();
 }
 
 // Build room list per floor
 function fpBuildFloors(fp) {
-    const { w, l, beds, baths, living, kitchen, altar, garage } = fp;
-    const area = w * l;
+    const { w, l, numFloors, beds, baths, living, kitchen, dining, altar, garage,
+            masterBed, balcony, laundry, maidRoom, rooftop } = fp;
 
-    // Ground floor rooms
+    // Ground floor
     const ground = [];
-    if (garage)  ground.push({name:'Gara',         area: w*3,    color:'#f1f5f9', icon:'🚗'});
-    if (living)  ground.push({name:'Phòng khách',  area: w*3.5,  color:'#dbeafe', icon:'🛋️'});
-    if (altar)   ground.push({name:'Phòng thờ',    area: w*2,    color:'#fee2e2', icon:'🕯️'});
-    if (kitchen) ground.push({name:'Bếp + Ăn',     area: w*3,    color:'#fef9c3', icon:'🍳'});
-    if (baths>=1) ground.push({name:'WC',           area: Math.max(4, w*1.2), color:'#f3e8ff', icon:'🚿'});
-    if (beds > 0) ground.push({name:'Cầu thang',   area: Math.max(5, w*1.3), color:'#e2e8f0', icon:'🪜'});
+    if (garage)   ground.push({name:'Gara',          area:w*3.5,              color:'#f1f5f9', icon:'🚗'});
+    if (living)   ground.push({name:'Phòng khách',   area:w*4,                color:'#dbeafe', icon:'🛋️'});
+    if (altar)    ground.push({name:'Phòng thờ',     area:Math.max(6,w*2),   color:'#fee2e2', icon:'🕯️'});
+    if (kitchen)  ground.push({name:'Bếp + Ăn',      area:w*3.5,              color:'#fef9c3', icon:'🍳'});
+    else if (dining) ground.push({name:'Phòng ăn',   area:w*2.5,              color:'#fef9c3', icon:'🪑'});
+    if (maidRoom) ground.push({name:'Giúp việc',     area:Math.max(6,w*1.5), color:'#f0fdf4', icon:'🧹'});
+    if (baths>=1) ground.push({name:'WC',            area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'});
+    if (numFloors>1) ground.push({name:'Cầu thang',  area:Math.max(5,w*1.4), color:'#e2e8f0', icon:'🪜'});
 
-    // Upper floors: 2 bedrooms + 1 WC per floor (for typical tube house)
     const floors = [ground];
     let bedLeft = beds, bathLeft = Math.max(0, baths - 1);
-    let floorNum = 2;
-    while (bedLeft > 0) {
+    let masterDone = false;
+
+    for (let f = 1; f < numFloors; f++) {
         const fl = [];
-        fl.push({name:'Cầu thang', area: Math.max(5, w*1.3), color:'#e2e8f0', icon:'🪜'});
+        fl.push({name:'Cầu thang', area:Math.max(5,w*1.4), color:'#e2e8f0', icon:'🪜'});
+        if (!masterDone && masterBed && bedLeft > 0) {
+            fl.push({name:'Phòng ngủ Master', area:Math.max(16,w*3.5), color:'#fce7f3', icon:'👑'});
+            fl.push({name:'Toilet Master',    area:Math.max(5,w*1.4),  color:'#f3e8ff', icon:'🚿'});
+            masterDone = true; bedLeft--;
+            bathLeft = Math.max(0, bathLeft - 1);
+        }
         const bedsThisFloor = Math.min(2, bedLeft);
+        const bedOffset = beds - bedLeft + (masterBed?1:0);
         for (let i=0; i<bedsThisFloor; i++) {
-            fl.push({name:`Phòng ngủ ${beds - bedLeft + i + 1}`, area: Math.max(12, w*2.8), color:'#dcfce7', icon:'🛏️'});
+            fl.push({name:`Phòng ngủ ${bedOffset+i+1}`, area:Math.max(12,w*2.8), color:'#dcfce7', icon:'🛏️'});
         }
-        if (bathLeft > 0) {
-            fl.push({name:'WC', area: Math.max(4, w*1.2), color:'#f3e8ff', icon:'🚿'});
-            bathLeft--;
-        }
+        if (bathLeft > 0) { fl.push({name:'WC', area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'}); bathLeft--; }
+        if (balcony) fl.push({name:'Ban công', area:Math.max(4,w*1.5), color:'#f0fdf4', icon:'🌿'});
+        if (laundry && f === numFloors-1) fl.push({name:'Phòng giặt', area:Math.max(4,w*1.5), color:'#e0f2fe', icon:'🪣'});
         bedLeft -= bedsThisFloor;
         floors.push(fl);
-        floorNum++;
     }
+    if (rooftop) floors.push([{name:'Sân thượng', area:w*(l/numFloors), color:'#e0f2fe', icon:'☀️'}]);
     return floors;
 }
 
-// BSP layout: recursively split rect to fit rooms
+// BSP layout
 function fpBSP(rect, rooms) {
     if (!rooms.length) return [];
     if (rooms.length === 1) return [{...rooms[0], x:rect.x, y:rect.y, w:rect.w, h:rect.h}];
-
     const totalArea = rooms.reduce((s,r) => s + (r.area||10), 0);
-    // Find best split point (closest to 50/50)
-    let bestSplit = 1, bestDiff = Infinity;
-    let acc = 0;
+    let bestSplit = 1, bestDiff = Infinity, acc = 0;
     for (let i = 1; i < rooms.length; i++) {
         acc += (rooms[i-1].area||10);
         const diff = Math.abs(acc/totalArea - 0.5);
@@ -3140,103 +3407,188 @@ function fpBSP(rect, rooms) {
     const groupA = rooms.slice(0, bestSplit);
     const groupB = rooms.slice(bestSplit);
     const ratioA = groupA.reduce((s,r)=>s+(r.area||10),0) / totalArea;
-
     if (rect.w >= rect.h) {
-        // Split vertically (left/right)
         const splitX = rect.w * ratioA;
-        return [
-            ...fpBSP({x:rect.x,          y:rect.y, w:splitX,          h:rect.h}, groupA),
-            ...fpBSP({x:rect.x+splitX,   y:rect.y, w:rect.w-splitX,   h:rect.h}, groupB),
-        ];
+        return [...fpBSP({x:rect.x, y:rect.y, w:splitX, h:rect.h}, groupA),
+                ...fpBSP({x:rect.x+splitX, y:rect.y, w:rect.w-splitX, h:rect.h}, groupB)];
     } else {
-        // Split horizontally (top/bottom)
         const splitY = rect.h * ratioA;
-        return [
-            ...fpBSP({x:rect.x, y:rect.y,          w:rect.w, h:splitY         }, groupA),
-            ...fpBSP({x:rect.x, y:rect.y+splitY,   w:rect.w, h:rect.h-splitY  }, groupB),
-        ];
+        return [...fpBSP({x:rect.x, y:rect.y, w:rect.w, h:splitY}, groupA),
+                ...fpBSP({x:rect.x, y:rect.y+splitY, w:rect.w, h:rect.h-splitY}, groupB)];
     }
 }
 
-// Generate SVG for one floor
-function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel) {
-    const W = floorWidth * scale, H = floorHeight * scale;
-    const PAD = 2; // inner padding for room rectangles
+// Compass SVG
+function fpCompassSVG(facing, cx, cy) {
+    const dirMap = {south:180,north:0,east:90,west:270,southeast:135,southwest:225,northeast:45,northwest:315};
+    const angle = dirMap[facing] || 0;
+    const r = 14;
+    return `<g transform="translate(${cx},${cy})">
+        <circle r="${r}" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.92"/>
+        <g transform="rotate(${angle})">
+            <polygon points="0,${-r*.72} ${r*.22},0 0,${r*.38}" fill="#ef4444"/>
+            <polygon points="0,${r*.72} ${r*.22},0 0,${r*.38}" fill="#94a3b8"/>
+        </g>
+        <text y="1" text-anchor="middle" dominant-baseline="middle" font-size="6" font-weight="700" fill="#1e293b">N</text>
+    </g>`;
+}
 
+// Simple furniture hints inside rooms
+function fpFurnitureSVG(icon, rx, ry, rw, rh) {
+    if (rw < 40 || rh < 35) return '';
+    if (icon === '🛏️') return `
+        <rect x="${rx+4}" y="${ry+rh*0.45}" width="${rw-8}" height="${rh*0.42}" fill="none" stroke="#86efac" stroke-width="1.2" rx="3"/>
+        <rect x="${rx+4}" y="${ry+4}" width="${rw*.42}" height="${rh*.32}" fill="none" stroke="#bbf7d0" stroke-width="1" rx="2"/>
+        <rect x="${rx+rw*.54}" y="${ry+4}" width="${rw*.42}" height="${rh*.32}" fill="none" stroke="#bbf7d0" stroke-width="1" rx="2"/>`;
+    if (icon === '🛋️' && rw > 55) return `
+        <rect x="${rx+6}" y="${ry+rh*.42}" width="${rw-12}" height="${rh*.38}" fill="none" stroke="#93c5fd" stroke-width="1.2" rx="4"/>
+        <rect x="${rx+6}" y="${ry+rh*.32}" width="${rw*.22}" height="${rh*.48}" fill="none" stroke="#93c5fd" stroke-width="1" rx="2"/>
+        <rect x="${rx+rw-.22*rw-6}" y="${ry+rh*.32}" width="${rw*.22}" height="${rh*.48}" fill="none" stroke="#93c5fd" stroke-width="1" rx="2"/>`;
+    if (icon === '🍳' && rw > 55) return `
+        <rect x="${rx+4}" y="${ry+4}" width="${rw*.38}" height="${rh*.52}" fill="none" stroke="#fcd34d" stroke-width="1" rx="2"/>
+        <rect x="${rx+4}" y="${ry+rh*.58}" width="${rw-8}" height="${rh*.32}" fill="none" stroke="#fcd34d" stroke-width="1" rx="2"/>`;
+    if (icon === '🚿') return `
+        <rect x="${rx+4}" y="${ry+rh*.3}" width="${rw-8}" height="${rh*.55}" fill="none" stroke="#c4b5fd" stroke-width="1" rx="3"/>`;
+    if (icon === '🚗' && rw > 60) return `
+        <rect x="${rx+rw*.1}" y="${ry+rh*.2}" width="${rw*.8}" height="${rh*.6}" fill="none" stroke="#cbd5e1" stroke-width="1.2" rx="4"/>`;
+    return '';
+}
+
+// Generate SVG for one floor
+function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel, fp, isGround) {
+    const W = floorWidth * scale, H = floorHeight * scale;
+    const PAD = 2;
     const laid = fpBSP({x:0, y:0, w:floorWidth, h:floorHeight}, rooms);
 
     const roomsSVG = laid.map(r => {
-        const rx = r.x*scale + PAD, ry = r.y*scale + PAD;
-        const rw = r.w*scale - PAD*2, rh = r.h*scale - PAD*2;
-        const cx = rx + rw/2, cy = ry + rh/2;
-        const areaM = (r.w * r.h).toFixed(1);
-        const fontSize = Math.max(9, Math.min(13, rw/8));
-        const iconSize = Math.max(12, Math.min(20, rh/4));
-        const showIcon = rw > 40 && rh > 36;
-        const showArea = rw > 50 && rh > 48;
+        const rx = r.x*scale+PAD, ry = r.y*scale+PAD;
+        const rw = r.w*scale-PAD*2, rh = r.h*scale-PAD*2;
+        const cx = rx+rw/2, cy = ry+rh/2;
+        const areaM = (r.w*r.h).toFixed(1);
+        const fs = Math.max(9, Math.min(13, rw/8));
+        const is = Math.max(12, Math.min(20, rh/4));
+        const showIcon = rw>40 && rh>36;
+        const showArea = rw>50 && rh>48;
+        const furn = fp.furniture ? fpFurnitureSVG(r.icon, rx, ry, rw, rh) : '';
         return `
-        <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}"
-              fill="${r.color}" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
-        ${showIcon ? `<text x="${cx}" y="${cy - (showArea?8:2)}" text-anchor="middle" font-size="${iconSize}" dominant-baseline="middle">${r.icon||''}</text>` : ''}
-        <text x="${cx}" y="${cy + (showIcon?iconSize*0.6:0)}" text-anchor="middle" dominant-baseline="middle"
-              font-size="${fontSize}" font-weight="600" fill="#334155">${r.name}</text>
-        ${showArea ? `<text x="${cx}" y="${cy + (showIcon?iconSize*0.6:0) + fontSize + 3}" text-anchor="middle" dominant-baseline="middle"
-              font-size="${Math.max(8,fontSize-2)}" fill="#64748b">${areaM}m²</text>` : ''}
-        `;
+        <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
+        ${furn}
+        ${showIcon?`<text x="${cx}" y="${cy-(showArea?8:2)}" text-anchor="middle" font-size="${is}" dominant-baseline="middle">${r.icon||''}</text>`:''}
+        <text x="${cx}" y="${cy+(showIcon?is*.6:0)}" text-anchor="middle" dominant-baseline="middle"
+              font-size="${fs}" font-weight="600" fill="#334155">${r.name}</text>
+        ${showArea?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)+fs+3}" text-anchor="middle" dominant-baseline="middle"
+              font-size="${Math.max(8,fs-2)}" fill="#64748b">${areaM}m²</text>`:''}`;
     }).join('');
 
-    // Dimension annotations
-    const dimColor = '#64748b';
-    const dimSize  = 10;
-    const arrLen   = 6;
-    const dimW = `
-        <line x1="0" y1="${H+18}" x2="${W}" y2="${H+18}" stroke="${dimColor}" stroke-width="1"/>
-        <line x1="0" y1="${H+14}" x2="0" y2="${H+22}" stroke="${dimColor}" stroke-width="1"/>
-        <line x1="${W}" y1="${H+14}" x2="${W}" y2="${H+22}" stroke="${dimColor}" stroke-width="1"/>
-        <text x="${W/2}" y="${H+30}" text-anchor="middle" font-size="${dimSize}" fill="${dimColor}">${floorWidth}m</text>`;
-    const dimH = `
-        <line x1="${W+18}" y1="0" x2="${W+18}" y2="${H}" stroke="${dimColor}" stroke-width="1"/>
-        <line x1="${W+14}" y1="0" x2="${W+22}" y2="0" stroke="${dimColor}" stroke-width="1"/>
-        <line x1="${W+14}" y1="${H}" x2="${W+22}" y2="${H}" stroke="${dimColor}" stroke-width="1"/>
-        <text x="${W+28}" y="${H/2}" text-anchor="middle" font-size="${dimSize}" fill="${dimColor}"
-              transform="rotate(90,${W+28},${H/2})">${floorHeight}m</text>`;
+    // Main door indicator
+    let doorSVG = '';
+    if (isGround) {
+        const dLabel = `<text text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa</text>`;
+        if (fp.mainDoor==='front')  doorSVG=`<polygon points="${W/2-7},${H+6} ${W/2+7},${H+6} ${W/2},${H-2}" fill="#2563eb"/><text x="${W/2}" y="${H+18}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa chính</text>`;
+        else if (fp.mainDoor==='back')  doorSVG=`<polygon points="${W/2-7},-6 ${W/2+7},-6 ${W/2},2" fill="#2563eb"/><text x="${W/2}" y="-12" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa chính</text>`;
+        else if (fp.mainDoor==='left')  doorSVG=`<polygon points="-6,${H/2-7} -6,${H/2+7} 2,${H/2}" fill="#2563eb"/>`;
+        else if (fp.mainDoor==='right') doorSVG=`<polygon points="${W+6},${H/2-7} ${W+6},${H/2+7} ${W-2},${H/2}" fill="#2563eb"/>`;
+    }
 
-    const totalW = W + 50, totalH = H + 50;
+    // Neighbor thick walls
+    let neighborSVG = '';
+    if (fp.neighbor==='both'||fp.neighbor==='left')  neighborSVG+=`<line x1="1.5" y1="0" x2="1.5" y2="${H}" stroke="#64748b" stroke-width="5" opacity=".5"/>`;
+    if (fp.neighbor==='both'||fp.neighbor==='right') neighborSVG+=`<line x1="${W-1.5}" y1="0" x2="${W-1.5}" y2="${H}" stroke="#64748b" stroke-width="5" opacity=".5"/>`;
+
+    // Alley indicator
+    let alleySVG = '';
+    if (fp.alley==='left'||fp.alley==='both')  alleySVG+=`<rect x="-10" y="0" width="8" height="${H}" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" rx="1"/>`;
+    if (fp.alley==='right'||fp.alley==='both') alleySVG+=`<rect x="${W+2}" y="0" width="8" height="${H}" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" rx="1"/>`;
+
+    // Garden
+    let gardenSVG = '';
+    if (fp.garden && isGround) {
+        const gH = Math.max(20, H*.15);
+        gardenSVG = `<rect x="0" y="${H+36}" width="${W}" height="${gH}" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1" rx="2"/>
+        <text x="${W/2}" y="${H+36+gH/2}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#059669">🌿 Sân vườn</text>`;
+    }
+
+    // Fence
+    let fenceSVG = '';
+    if (fp.fence && isGround) {
+        fenceSVG = `<rect x="-4" y="-4" width="${W+8}" height="4" fill="#9ca3af" rx="1"/>`;
+    }
+
+    // Dimension annotations
+    const dc = '#64748b', ds = 10;
+    const extraTop = (fp.mainDoor==='back') ? 20 : 0;
+    const dimW = `
+        <line x1="0" y1="${H+20}" x2="${W}" y2="${H+20}" stroke="${dc}" stroke-width="1"/>
+        <line x1="0" y1="${H+16}" x2="0" y2="${H+24}" stroke="${dc}" stroke-width="1"/>
+        <line x1="${W}" y1="${H+16}" x2="${W}" y2="${H+24}" stroke="${dc}" stroke-width="1"/>
+        <text x="${W/2}" y="${H+32}" text-anchor="middle" font-size="${ds}" fill="${dc}">${floorWidth}m</text>`;
+    const dimH = `
+        <line x1="${W+20}" y1="0" x2="${W+20}" y2="${H}" stroke="${dc}" stroke-width="1"/>
+        <line x1="${W+16}" y1="0" x2="${W+24}" y2="0" stroke="${dc}" stroke-width="1"/>
+        <line x1="${W+16}" y1="${H}" x2="${W+24}" y2="${H}" stroke="${dc}" stroke-width="1"/>
+        <text x="${W+32}" y="${H/2}" text-anchor="middle" font-size="${ds}" fill="${dc}"
+              transform="rotate(90,${W+32},${H/2})">${floorHeight}m</text>`;
+
+    // Floor height label
+    const floorHeightVal = isGround ? fp.groundH : fp.floorH;
+    const heightLabel = `<text x="${W+20}" y="${H+44}" text-anchor="middle" font-size="9" fill="${dc}" transform="rotate(0)"
+        style="display:none"></text>`;
+
+    // Compass (ground floor only, top-right)
+    const compassSVG = isGround ? fpCompassSVG(fp.facing||'south', W-18, 18) : '';
+
+    // Stair shape hint on stairs room
+    const stairHint = laid.find(r=>r.icon==='🪜');
+    let stairShapeSVG = '';
+    if (stairHint && fp.stairType !== 'straight') {
+        const sx=stairHint.x*scale+PAD+4, sy=stairHint.y*scale+PAD+4;
+        const sw=stairHint.w*scale-PAD*2-8, sh=stairHint.h*scale-PAD*2-8;
+        if (fp.stairType==='L')
+            stairShapeSVG=`<polyline points="${sx},${sy+sh} ${sx},${sy} ${sx+sw},${sy}" fill="none" stroke="#475569" stroke-width="2"/>`;
+        else if (fp.stairType==='U')
+            stairShapeSVG=`<polyline points="${sx},${sy+sh} ${sx},${sy} ${sx+sw},${sy} ${sx+sw},${sy+sh}" fill="none" stroke="#475569" stroke-width="2"/>`;
+        else if (fp.stairType==='spiral') {
+            const scx=sx+sw/2, scy=sy+sh/2, sr=Math.min(sw,sh)/3;
+            stairShapeSVG=`<circle cx="${scx}" cy="${scy}" r="${sr}" fill="none" stroke="#475569" stroke-width="2"/>
+            <circle cx="${scx}" cy="${scy}" r="${sr*.5}" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="3,2"/>`;
+        }
+    }
+
+    const totalW = W + 60, totalH = H + 60 + (fp.garden&&isGround?40:0);
     return `
-    <div style="margin-bottom:4px;">
-        <span style="font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.05em;">${floorLabel}</span>
+    <div style="margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.06em;">${floorLabel}</span>
+        <span style="font-size:10px;color:var(--gray-400);">cao ${floorHeightVal}m • ${(floorWidth*floorHeight).toFixed(1)}m²</span>
     </div>
-    <div style="overflow-x:auto;">
-    <svg width="${totalW}" height="${totalH}" xmlns="http://www.w3.org/2000/svg"
-         style="display:block;max-width:100%;">
-        <!-- outer wall -->
-        <rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#1e293b" stroke-width="3" rx="2"/>
+    <div style="overflow-x:auto;margin-bottom:4px;">
+    <svg width="${totalW}" height="${totalH}" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;">
+        ${alleySVG}
+        <rect x="0" y="0" width="${W}" height="${H}" fill="${fp.exteriorColor||'#fafafa'}" stroke="#1e293b" stroke-width="3" rx="2"/>
+        ${neighborSVG}
         ${roomsSVG}
+        ${stairShapeSVG}
+        ${doorSVG}
+        ${gardenSVG}
+        ${fenceSVG}
         ${dimW}${dimH}
+        ${compassSVG}
     </svg>
     </div>`;
 }
 
 function genFloorPlanSVG(fp) {
-    const { w, l } = fp;
+    const { w, l, numFloors } = fp;
     if (!w || !l || w < 2 || l < 2) return '<div class="empty"><div class="empty-desc">Nhập kích thước hợp lệ</div></div>';
-
     const floors = fpBuildFloors(fp);
-    const numFloors = floors.length;
-
-    // Each floor gets equal share of total length
-    const floorH = parseFloat((l / numFloors).toFixed(2));
-
-    // Scale to fit display (max 420px wide)
-    const maxDisplayW = 420;
-    const scale = Math.min(maxDisplayW / w, 50); // max 50px per meter, min fit screen
-
-    const floorNames = ['TẦNG TRỆT','TẦNG 1','TẦNG 2','TẦNG 3','TẦNG 4'];
-
+    const floorH = parseFloat((l / (numFloors||1)).toFixed(2));
+    const scale = Math.min(420 / w, 50);
+    const floorNames = ['TẦNG TRỆT','TẦNG 1','TẦNG 2','TẦNG 3','TẦNG 4','TẦNG 5'];
     return floors.map((rooms, i) => {
         if (!rooms.length) return '';
-        return fpFloorSVG(rooms, w, floorH, scale, floorNames[i] || `TẦNG ${i}`);
-    }).join('<div style="height:16px;"></div>');
+        const isRoof = fp.rooftop && i === floors.length-1;
+        const label = isRoof ? 'SÂN THƯỢNG' : (floorNames[i] || `TẦNG ${i}`);
+        return fpFloorSVG(rooms, w, floorH, scale, label, fp, i===0);
+    }).join('<div style="height:20px;border-left:3px dashed var(--gray-200);margin-left:12px;padding-left:8px;font-size:10px;color:var(--gray-400);line-height:20px;">▲</div>');
 }
 </script>
 </body>
