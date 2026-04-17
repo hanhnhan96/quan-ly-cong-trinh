@@ -3354,39 +3354,65 @@ function fpBuildFloors(fp) {
     const { w, l, numFloors, beds, baths, living, kitchen, dining, altar, garage,
             masterBed, balcony, laundry, maidRoom, rooftop } = fp;
 
+    const hasUpperFloor = numFloors > 1;
+
     // Ground floor
     const ground = [];
-    if (garage)   ground.push({name:'Gara',          area:w*3.5,              color:'#f1f5f9', icon:'🚗'});
-    if (living)   ground.push({name:'Phòng khách',   area:w*4,                color:'#dbeafe', icon:'🛋️'});
-    if (altar)    ground.push({name:'Phòng thờ',     area:Math.max(6,w*2),   color:'#fee2e2', icon:'🕯️'});
-    if (kitchen)  ground.push({name:'Bếp + Ăn',      area:w*3.5,              color:'#fef9c3', icon:'🍳'});
-    else if (dining) ground.push({name:'Phòng ăn',   area:w*2.5,              color:'#fef9c3', icon:'🪑'});
-    if (maidRoom) ground.push({name:'Giúp việc',     area:Math.max(6,w*1.5), color:'#f0fdf4', icon:'🧹'});
-    if (baths>=1) ground.push({name:'WC',            area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'});
-    if (numFloors>1) ground.push({name:'Cầu thang',  area:Math.max(5,w*1.4), color:'#e2e8f0', icon:'🪜'});
+    if (garage)   ground.push({name:'Gara',         area:w*3.5,             color:'#f1f5f9', icon:'🚗'});
+    if (living)   ground.push({name:'Phòng khách',  area:w*4,               color:'#dbeafe', icon:'🛋️'});
+    if (altar)    ground.push({name:'Phòng thờ',    area:Math.max(6,w*2),   color:'#fee2e2', icon:'🕯️'});
+    if (kitchen)  ground.push({name:'Bếp + Ăn',     area:w*3.5,             color:'#fef9c3', icon:'🍳'});
+    else if (dining) ground.push({name:'Phòng ăn',  area:w*2.5,             color:'#fef9c3', icon:'🪑'});
+    if (maidRoom) ground.push({name:'Giúp việc',    area:Math.max(6,w*1.5), color:'#f0fdf4', icon:'🧹'});
+    if (baths>=1) ground.push({name:'WC',           area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'});
 
+    // Nhà 1 tầng: đặt phòng ngủ luôn ở tầng trệt
+    if (!hasUpperFloor) {
+        if (masterBed && beds>0) {
+            ground.push({name:'Phòng ngủ Master', area:Math.max(16,w*3.5), color:'#fce7f3', icon:'👑'});
+            ground.push({name:'Toilet Master',    area:Math.max(5,w*1.4),  color:'#f3e8ff', icon:'🚿'});
+        }
+        const startBed = (masterBed && beds>0) ? 1 : 0;
+        for (let i=startBed; i<beds; i++) {
+            ground.push({name:`Phòng ngủ ${i+1}`, area:Math.max(12,w*2.8), color:'#dcfce7', icon:'🛏️'});
+        }
+        for (let i=1; i<baths; i++) ground.push({name:`WC ${i+1}`, area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'});
+        return [ground];
+    }
+
+    ground.push({name:'Cầu thang', area:Math.max(5,w*1.4), color:'#e2e8f0', icon:'🪜'});
     const floors = [ground];
+
+    // Phân phối phòng ngủ vào các tầng lầu
+    // Mỗi tầng tối đa 2 phòng ngủ, tầng cuối nhận tất cả còn lại
     let bedLeft = beds, bathLeft = Math.max(0, baths - 1);
     let masterDone = false;
+    const upperCount = numFloors - 1; // số tầng lầu thực sự
 
-    for (let f = 1; f < numFloors; f++) {
+    for (let f = 1; f <= upperCount; f++) {
+        const isLastUpper = (f === upperCount);
         const fl = [];
         fl.push({name:'Cầu thang', area:Math.max(5,w*1.4), color:'#e2e8f0', icon:'🪜'});
+
+        // Master bedroom ưu tiên tầng 1
         if (!masterDone && masterBed && bedLeft > 0) {
             fl.push({name:'Phòng ngủ Master', area:Math.max(16,w*3.5), color:'#fce7f3', icon:'👑'});
             fl.push({name:'Toilet Master',    area:Math.max(5,w*1.4),  color:'#f3e8ff', icon:'🚿'});
             masterDone = true; bedLeft--;
             bathLeft = Math.max(0, bathLeft - 1);
         }
-        const bedsThisFloor = Math.min(2, bedLeft);
-        const bedOffset = beds - bedLeft + (masterBed?1:0);
+
+        // Tầng cuối: đặt tất cả phòng ngủ còn lại; tầng khác: tối đa 2
+        const bedsThisFloor = isLastUpper ? bedLeft : Math.min(2, bedLeft);
+        const bedOffset = beds - bedLeft + (masterBed ? 1 : 0);
         for (let i=0; i<bedsThisFloor; i++) {
             fl.push({name:`Phòng ngủ ${bedOffset+i+1}`, area:Math.max(12,w*2.8), color:'#dcfce7', icon:'🛏️'});
         }
+        bedLeft -= bedsThisFloor;
+
         if (bathLeft > 0) { fl.push({name:'WC', area:Math.max(4,w*1.2), color:'#f3e8ff', icon:'🚿'}); bathLeft--; }
         if (balcony) fl.push({name:'Ban công', area:Math.max(4,w*1.5), color:'#f0fdf4', icon:'🌿'});
-        if (laundry && f === numFloors-1) fl.push({name:'Phòng giặt', area:Math.max(4,w*1.5), color:'#e0f2fe', icon:'🪣'});
-        bedLeft -= bedsThisFloor;
+        if (laundry && isLastUpper) fl.push({name:'Phòng giặt', area:Math.max(4,w*1.5), color:'#e0f2fe', icon:'🪣'});
         floors.push(fl);
     }
     if (rooftop) floors.push([{name:'Sân thượng', area:w*(l/numFloors), color:'#e0f2fe', icon:'☀️'}]);
