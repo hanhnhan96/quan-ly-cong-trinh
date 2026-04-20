@@ -3006,6 +3006,7 @@ function renderFloorPlanView() {
         stairType:'straight', stairPos:'middle',
         style:'modern', roofType:'flat', exteriorColor:'#f5f0e8', material:'paint',
         garden:false, fence:false, furniture:true,
+        corridor:false, corridorW:1.2, corridorPos:'left',
     };
     Object.keys(D).forEach(k => { if (S.fp[k] === undefined) S.fp[k] = D[k]; });
     if (!S.fpTab) S.fpTab = 'size';
@@ -3135,6 +3136,38 @@ function fpFormInner(fp) {
                 style="width:16px;height:16px;accent-color:var(--primary);">
             <span style="font-size:13px;">${label}</span>
         </label>`).join('')}
+
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin:14px 0 8px;letter-spacing:.08em;">🚶 HÀNH LANG / LỐI ĐI</div>
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
+            <input type="checkbox" ${fp.corridor?'checked':''} onchange="S.fp.corridor=this.checked;S.fp.floorRooms=null;fpFormUpdate();fpRedraw()"
+                style="width:16px;height:16px;accent-color:var(--primary);">
+            <span style="font-size:13px;">Thêm hành lang trong nhà</span>
+        </label>
+        ${fp.corridor ? `
+        <div style="padding:10px;background:var(--gray-50);border-radius:8px;margin-top:8px;display:flex;flex-direction:column;gap:10px;">
+            <div>
+                <label class="form-label" style="margin-bottom:4px;">Chiều rộng hành lang (m)</label>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <button onclick="S.fp.corridorW=Math.max(0.8,+(S.fp.corridorW-0.1).toFixed(1));S.fp.floorRooms=null;fpFormUpdate();fpRedraw()"
+                        style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--gray-300);background:white;font-size:16px;cursor:pointer;">−</button>
+                    <span style="font-size:15px;font-weight:700;min-width:36px;text-align:center;">${fp.corridorW}m</span>
+                    <button onclick="S.fp.corridorW=Math.min(2.5,+(S.fp.corridorW+0.1).toFixed(1));S.fp.floorRooms=null;fpFormUpdate();fpRedraw()"
+                        style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--primary);background:var(--primary);color:white;font-size:16px;cursor:pointer;">+</button>
+                    <span style="font-size:11px;color:var(--gray-400);">(min 0.8m)</span>
+                </div>
+            </div>
+            <div>
+                <label class="form-label" style="margin-bottom:4px;">Vị trí hành lang</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${[['left','← Trái'],['right','Phải →'],['center','Giữa ↕']].map(([v,l])=>`
+                    <button onclick="S.fp.corridorPos='${v}';S.fp.floorRooms=null;fpFormUpdate();fpRedraw()"
+                        style="padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+                        border:1.5px solid ${fp.corridorPos===v?'var(--primary)':'var(--gray-300)'};
+                        background:${fp.corridorPos===v?'var(--primary-light)':'white'};
+                        color:${fp.corridorPos===v?'var(--primary)':'var(--gray-600)'};">${l}</button>`).join('')}
+                </div>
+            </div>
+        </div>` : ''}
     `;
 
     // ── TAB 3: HƯỚNG & CỬA ──
@@ -3425,6 +3458,31 @@ function fpBuildFloors(fp) {
     return floors;
 }
 
+// Layout rooms for one floor, handling corridor reservation
+function fpLayoutRooms(rooms, fp, w, floorH) {
+    if (!fp.corridor || !fp.corridorW || fp.corridorW < 0.5) {
+        return fpBSP({x:0, y:0, w, h:floorH}, rooms);
+    }
+    const cw = Math.min(fp.corridorW, w * 0.4); // max 40% of width
+    const pos = fp.corridorPos || 'left';
+    let corrX = 0, roomX = cw, roomW = w - cw;
+    if (pos === 'right')  { corrX = w - cw; roomX = 0; roomW = w - cw; }
+    if (pos === 'center') { corrX = (w - cw) / 2; roomX = 0; roomW = w; } // center: BSP full, overlay corr
+
+    const corrRoom = {
+        name:'Hành lang', icon:'🚶', color:'#f0f9ff', isCorr:true,
+        x: corrX, y: 0, w: cw, h: floorH, area: cw * floorH
+    };
+
+    if (pos === 'center') {
+        // Overlay: place rooms normally then add corridor on top
+        const bspRooms = fpBSP({x:0, y:0, w, h:floorH}, rooms);
+        return [...bspRooms, corrRoom];
+    }
+    const bspRooms = roomW > 0.5 ? fpBSP({x:roomX, y:0, w:roomW, h:floorH}, rooms) : [];
+    return [corrRoom, ...bspRooms];
+}
+
 // BSP layout
 function fpBSP(rect, rooms) {
     if (!rooms.length) return [];
@@ -3503,20 +3561,41 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
         const showArea = rw>50 && rh>48;
         const furn = fp.furniture ? fpFurnitureSVG(r.icon, rx, ry, rw, rh) : '';
         const isSel = _fpSel && _fpSel.fi===floorIdx && _fpSel.ri===ri;
-        const stroke = isSel ? '#2563eb' : '#94a3b8';
-        const sw = isSel ? '2.5' : '1.5';
+        const isCorr = !!r.isCorr;
+        const stroke = isSel ? '#2563eb' : (isCorr ? '#93c5fd' : '#94a3b8');
+        const sw = isSel ? '2.5' : (isCorr ? '1.5' : '1.5');
+        const strokeDash = isCorr ? 'stroke-dasharray="5,3"' : '';
+
+        // Corridor-specific dimension overlay
+        let corrDimSVG = '';
+        if (isCorr && rw > 8 && rh > 20) {
+            const midY = ry + rh / 2;
+            corrDimSVG = `
+            <!-- corridor width dim -->
+            <line x1="${rx+2}" y1="${midY}" x2="${rx+rw-2}" y2="${midY}" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,2" pointer-events="none"/>
+            <line x1="${rx+2}" y1="${midY-5}" x2="${rx+2}" y2="${midY+5}" stroke="#3b82f6" stroke-width="1.5" pointer-events="none"/>
+            <line x1="${rx+rw-2}" y1="${midY-5}" x2="${rx+rw-2}" y2="${midY+5}" stroke="#3b82f6" stroke-width="1.5" pointer-events="none"/>
+            <text x="${cx}" y="${midY-8}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700" pointer-events="none">↔ ${r.w.toFixed(1)}m</text>
+            <!-- walking arrows -->
+            ${rh > 60 ? `
+            <polygon points="${cx-3},${ry+16} ${cx+3},${ry+16} ${cx},${ry+8}" fill="#93c5fd" pointer-events="none"/>
+            <polygon points="${cx-3},${ry+rh-16} ${cx+3},${ry+rh-16} ${cx},${ry+rh-8}" fill="#93c5fd" pointer-events="none"/>` : ''}
+            <!-- length dim -->
+            ${rh > 40 ? `<text x="${cx}" y="${midY+16}" text-anchor="middle" font-size="8" fill="#64748b" pointer-events="none">${r.h.toFixed(1)}m dài • ${(r.w*r.h).toFixed(1)}m²</text>` : ''}`;
+        }
+
         return `
         <g style="cursor:move;touch-action:none;user-select:none" onpointerdown="fpOnDown(event,${floorIdx},${ri},'move')">
-            <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="${stroke}" stroke-width="${sw}" rx="3"/>
-            ${furn}
-            ${showIcon?`<text x="${cx}" y="${cy-(showArea?8:2)}" text-anchor="middle" font-size="${is}" dominant-baseline="middle" pointer-events="none">${r.icon||''}</text>`:''}
-            <text x="${cx}" y="${cy+(showIcon?is*.6:0)}" text-anchor="middle" dominant-baseline="middle"
-                  font-size="${fs}" font-weight="600" fill="#334155" pointer-events="none">${r.name}</text>
-            ${showArea?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)+fs+3}" text-anchor="middle" dominant-baseline="middle"
+            <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="${stroke}" stroke-width="${sw}" ${strokeDash} rx="3"/>
+            ${isCorr ? corrDimSVG : furn}
+            ${!isCorr && showIcon?`<text x="${cx}" y="${cy-(showArea?8:2)}" text-anchor="middle" font-size="${is}" dominant-baseline="middle" pointer-events="none">${r.icon||''}</text>`:''}
+            ${!isCorr?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)}" text-anchor="middle" dominant-baseline="middle"
+                  font-size="${fs}" font-weight="600" fill="#334155" pointer-events="none">${r.name}</text>`:''}
+            ${!isCorr && showArea?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)+fs+3}" text-anchor="middle" dominant-baseline="middle"
                   font-size="${Math.max(8,fs-2)}" fill="#64748b" pointer-events="none">${areaM}m²</text>`:''}
         </g>
         <rect x="${rx+rw-HS}" y="${ry+rh-HS}" width="${HS}" height="${HS}"
-              fill="${isSel?'#2563eb':'#64748b'}" opacity="0.75" rx="2"
+              fill="${isSel?'#2563eb':'#64748b'}" opacity="${isCorr?'0.4':'0.75'}" rx="2"
               style="cursor:se-resize;touch-action:none"
               onpointerdown="fpOnDown(event,${floorIdx},${ri},'resize')"/>`;
     }).join('');
@@ -3666,13 +3745,13 @@ function genFloorPlanSVG(fp) {
         }).join(DIVIDER);
     }
 
-    // Auto BSP layout
+    // Auto BSP layout (with corridor handling)
     const floors = fpBuildFloors(fp);
     return floors.map((rooms, i) => {
         if (!rooms.length) return '';
         const isRoof = fp.rooftop && i === floors.length - 1;
         const label = isRoof ? 'SÂN THƯỢNG' : (floorNames[i] || `TẦNG ${i}`);
-        const laid = fpBSP({x:0, y:0, w, h:floorH}, rooms);
+        const laid = fpLayoutRooms(rooms, fp, w, floorH);
         return fpFloorSVG(laid, w, floorH, scale, label, fp, i === 0, i);
     }).join(DIVIDER);
 }
@@ -3690,7 +3769,7 @@ function fpInitRooms() {
     fp._scale = scale;
     fp._floorH = floorH;
     fp.floorRooms = floors.map(rooms =>
-        rooms.length ? fpBSP({x:0, y:0, w:fp.w, h:floorH}, rooms).map(r => ({...r})) : []
+        rooms.length ? fpLayoutRooms(rooms, fp, fp.w, floorH).map(r => ({...r})) : []
     );
 }
 
