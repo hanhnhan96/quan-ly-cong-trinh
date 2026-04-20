@@ -3009,16 +3009,19 @@ function renderFloorPlanView() {
         corridor:false, corridorW:1.2, corridorPos:'left',
     };
     Object.keys(D).forEach(k => { if (S.fp[k] === undefined) S.fp[k] = D[k]; });
+    if (!S.fpDesigns) S.fpDesigns = [];
     if (!S.fpTab) S.fpTab = 'size';
     const fp = S.fp;
     const area = (fp.w * fp.l).toFixed(1);
     const totalArea = (fp.w * fp.l * fp.numFloors).toFixed(1);
+    const savedCount = S.fpDesigns.length;
     const tabs = [
         {k:'size',   icon:'📐', label:'Kích thước'},
         {k:'rooms',  icon:'🛏️', label:'Phòng'},
         {k:'orient', icon:'🧭', label:'Hướng'},
         {k:'style',  icon:'🎨', label:'Phong cách'},
         {k:'3d',     icon:'📦', label:'3D'},
+        {k:'saved',  icon:'📁', label:`Đã lưu${savedCount?` (${savedCount})`:''}` },
     ];
     return `
     <div class="main-header">
@@ -3051,9 +3054,10 @@ function renderFloorPlanView() {
 
         <!-- SVG OUTPUT -->
         <div class="card" style="padding:12px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--gray-100);">
-                <span style="font-size:11px;color:var(--gray-400);">✋ Kéo phòng để di chuyển &nbsp;·&nbsp; ◼ Kéo góc để resize</span>
-                <button onclick="fpResetRooms()" style="font-size:11px;padding:4px 10px;border:1px solid var(--gray-300);background:var(--gray-50);color:var(--gray-600);border-radius:6px;cursor:pointer;font-weight:600;">↺ Tự động</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--gray-100);gap:6px;">
+                <span style="font-size:11px;color:var(--gray-400);flex:1;">✋ Kéo phòng &nbsp;·&nbsp; ◼ Kéo góc resize</span>
+                <button onclick="fpResetRooms()" style="font-size:11px;padding:4px 8px;border:1px solid var(--gray-300);background:var(--gray-50);color:var(--gray-600);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap;">↺ Tự động</button>
+                <button onclick="fpSaveDesign()" style="font-size:11px;padding:4px 8px;border:1px solid var(--success);background:var(--success-light);color:var(--success);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap;">💾 Lưu TK</button>
             </div>
             <div id="fp-output">
                 ${genFloorPlanSVG(fp)}
@@ -3304,6 +3308,77 @@ function fpFormInner(fp) {
             ⬇ Tải sơ đồ SVG
         </button>
     `;
+
+    // ── TAB 6: THIẾT KẾ ĐÃ LƯU ──
+    if (t === 'saved') {
+        const designs = S.fpDesigns || [];
+        return `
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:12px;letter-spacing:.08em;">THIẾT KẾ HOÀN THIỆN</div>
+
+        <button onclick="fpSaveDesign()"
+            style="width:100%;padding:10px;border-radius:8px;border:1.5px solid var(--success);
+            background:var(--success-light);color:var(--success);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px;">
+            💾 Lưu thiết kế hiện tại
+        </button>
+
+        ${designs.length === 0 ? `
+        <div style="text-align:center;padding:32px 16px;color:var(--gray-400);">
+            <div style="font-size:32px;margin-bottom:8px;">📁</div>
+            <div style="font-size:13px;">Chưa có thiết kế nào được lưu</div>
+            <div style="font-size:11px;margin-top:4px;">Nhấn "Lưu thiết kế" để lưu sơ đồ hiện tại</div>
+        </div>` : ''}
+
+        ${designs.map((d, idx) => `
+        <div style="border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;margin-bottom:10px;background:white;">
+            <!-- Header: tên + ngày -->
+            <div style="padding:10px 12px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:8px;">
+                <span style="font-size:14px;">📐</span>
+                <input type="text" value="${d.name.replace(/"/g,'&quot;')}"
+                    onchange="fpRenameDesign('${d.id}',this.value)"
+                    style="flex:1;border:none;background:transparent;font-size:13px;font-weight:700;color:var(--gray-900);outline:none;min-width:0;"
+                    placeholder="Tên thiết kế...">
+                <span style="font-size:10px;color:var(--gray-400);white-space:nowrap;">${d.savedAt||''}</span>
+            </div>
+            <!-- Preview + info -->
+            <div style="padding:10px 12px;display:flex;gap:10px;align-items:flex-start;">
+                <!-- Mini preview SVG -->
+                <div style="flex-shrink:0;border:1px solid var(--gray-200);border-radius:6px;overflow:hidden;background:white;">
+                    ${fpMiniPreview(d.fp)}
+                </div>
+                <!-- Info -->
+                <div style="flex:1;font-size:11px;color:var(--gray-600);line-height:1.9;">
+                    <div>📐 ${d.fp.w}m × ${d.fp.l}m • ${d.fp.numFloors||1} tầng</div>
+                    <div>🛏️ ${d.fp.beds||0} phòng ngủ • 🚿 ${d.fp.baths||0} WC</div>
+                    <div>📊 ${(d.fp.w*d.fp.l*(d.fp.numFloors||1)).toFixed(0)} m² tổng</div>
+                    <div style="color:var(--gray-400);">${[
+                        d.fp.living?'Phòng khách':'',
+                        d.fp.kitchen?'Bếp':'',
+                        d.fp.garage?'Gara':'',
+                        d.fp.altar?'Phòng thờ':'',
+                        d.fp.corridor?`Hành lang ${d.fp.corridorW}m`:'',
+                    ].filter(Boolean).join(' · ')}</div>
+                </div>
+            </div>
+            <!-- Actions -->
+            <div style="padding:8px 12px;border-top:1px solid var(--gray-100);display:flex;gap:6px;">
+                <button onclick="fpLoadDesign('${d.id}')"
+                    style="flex:1;padding:7px;border-radius:7px;border:1.5px solid var(--primary);
+                    background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;">
+                    📂 Tải thiết kế này
+                </button>
+                <button onclick="fpDuplicateDesign('${d.id}')"
+                    title="Nhân bản"
+                    style="padding:7px 10px;border-radius:7px;border:1px solid var(--gray-300);
+                    background:white;color:var(--gray-600);font-size:12px;cursor:pointer;">⎘</button>
+                <button onclick="fpDeleteDesign('${d.id}')"
+                    title="Xóa"
+                    style="padding:7px 10px;border-radius:7px;border:1px solid var(--danger-light);
+                    background:var(--danger-light);color:var(--danger);font-size:12px;cursor:pointer;">🗑</button>
+            </div>
+        </div>`).join('')}
+        `;
+    }
+
     return '';
 }
 
@@ -3831,6 +3906,98 @@ document.addEventListener('pointerup', function(e) {
     _fpDrag = null;
     save();
 });
+
+// ===== FLOOR PLAN — SAVED DESIGNS =====
+
+function fpSaveDesign() {
+    if (!S.fpDesigns) S.fpDesigns = [];
+    const n = S.fpDesigns.length + 1;
+    const design = {
+        id: uid(),
+        name: `Thiết kế ${n}`,
+        fp: JSON.parse(JSON.stringify(S.fp)), // deep clone
+        savedAt: todayYMD(),
+    };
+    S.fpDesigns.push(design);
+    save();
+    S.fpTab = 'saved';
+    // Re-render form to show saved tab
+    const inner = document.getElementById('fp-form-inner');
+    if (inner) inner.innerHTML = fpFormInner(S.fp);
+    // Update tab bar highlight (re-render whole view)
+    const main = document.getElementById('main-content');
+    if (main) main.innerHTML = renderFloorPlanView();
+}
+
+function fpRenameDesign(id, name) {
+    const d = (S.fpDesigns||[]).find(x => x.id === id);
+    if (d) { d.name = name.trim() || d.name; save(); }
+}
+
+function fpLoadDesign(id) {
+    const d = (S.fpDesigns||[]).find(x => x.id === id);
+    if (!d) return;
+    if (!confirm(`Tải thiết kế "${d.name}"?\nThiết kế hiện tại sẽ bị thay thế.`)) return;
+    S.fp = JSON.parse(JSON.stringify(d.fp));
+    S.fpTab = 'size';
+    save();
+    const main = document.getElementById('main-content');
+    if (main) main.innerHTML = renderFloorPlanView();
+}
+
+function fpDuplicateDesign(id) {
+    const d = (S.fpDesigns||[]).find(x => x.id === id);
+    if (!d) return;
+    const copy = JSON.parse(JSON.stringify(d));
+    copy.id = uid();
+    copy.name = d.name + ' (bản sao)';
+    copy.savedAt = todayYMD();
+    S.fpDesigns.push(copy);
+    save();
+    const inner = document.getElementById('fp-form-inner');
+    if (inner) inner.innerHTML = fpFormInner(S.fp);
+}
+
+function fpDeleteDesign(id) {
+    const d = (S.fpDesigns||[]).find(x => x.id === id);
+    if (!d || !confirm(`Xóa thiết kế "${d.name}"?`)) return;
+    S.fpDesigns = S.fpDesigns.filter(x => x.id !== id);
+    save();
+    const inner = document.getElementById('fp-form-inner');
+    if (inner) inner.innerHTML = fpFormInner(S.fp);
+}
+
+// Generate mini thumbnail SVG (ground floor only, small scale)
+function fpMiniPreview(fp) {
+    if (!fp || !fp.w || !fp.l) return '<div style="width:70px;height:90px;background:var(--gray-100);border-radius:4px;"></div>';
+    try {
+        const n = fp.numFloors || 1;
+        const floorH = parseFloat((fp.l / n).toFixed(2));
+        const scale = Math.min(70 / fp.w, 9);
+        const floors = fpBuildFloors(fp);
+        const ground = floors[0];
+        if (!ground || !ground.length) return '';
+        const laid = fpLayoutRooms(ground, fp, fp.w, floorH);
+        const W = Math.round(fp.w * scale);
+        const H = Math.round(floorH * scale);
+        const rects = laid.map(r => {
+            const rx = Math.round(r.x*scale)+1;
+            const ry = Math.round(r.y*scale)+1;
+            const rw = Math.max(2, Math.round(r.w*scale)-2);
+            const rh = Math.max(2, Math.round(r.h*scale)-2);
+            return `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="#94a3b8" stroke-width="0.5" rx="1"/>`;
+        }).join('');
+        // Floor count indicator
+        const floors2 = fp.numFloors > 1 ? `<text x="${W/2}" y="${H+8}" text-anchor="middle" font-size="6" fill="#64748b">${n}T</text>` : '';
+        return `<svg width="${W+4}" height="${H+12}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+            <rect x="0" y="0" width="${W}" height="${H}" fill="${fp.exteriorColor||'#fafafa'}" stroke="#1e293b" stroke-width="1.5" rx="1"/>
+            ${rects}
+            ${floors2}
+        </svg>`;
+    } catch(err) {
+        return '<div style="width:70px;height:90px;background:var(--gray-100);border-radius:4px;"></div>';
+    }
+}
 
 // Set door wall + exact position by clicking on SVG wall
 function fpSetDoor(e, wall, wallLengthPx, isVertical) {
