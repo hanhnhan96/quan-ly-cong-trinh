@@ -3569,10 +3569,31 @@ function fpBuildFloors(fp) {
     return floors;
 }
 
+// Sắp xếp phòng theo hướng cửa chính:
+// Phòng khách/bếp/garage → gần cửa; Phòng ngủ → phía trong/trên
+function fpSortRoomsForDoor(rooms, doorWall) {
+    const nearDoor  = new Set(['🛋️','🍳','🍽️','🚗','🪔']); // public rooms → kề cửa
+    const farDoor   = new Set(['🛏️','👑']);                  // bedrooms → xa cửa
+    const score = r => nearDoor.has(r.icon) ? 2 : farDoor.has(r.icon) ? 0 : 1;
+
+    // BSP: groupA = đầu mảng (top/left), groupB = cuối mảng (bottom/right)
+    // front door = bottom → public rooms phải nằm ở cuối mảng (groupB)
+    // back  door = top    → public rooms nằm ở đầu mảng (groupA)
+    // left  door = left   → public rooms ở đầu mảng (groupA)
+    // right door = right  → public rooms ở cuối mảng (groupB)
+    const publicAtEnd = (doorWall === 'front' || doorWall === 'right');
+    return [...rooms].sort((a, b) => publicAtEnd
+        ? score(a) - score(b)   // private first → end up in groupA (far)
+        : score(b) - score(a)   // public first  → end up in groupA (near)
+    );
+}
+
 // Layout rooms for one floor, handling corridor reservation
 function fpLayoutRooms(rooms, fp, w, floorH) {
+    const sorted = fpSortRoomsForDoor(rooms, fp.mainDoor || 'front');
+
     if (!fp.corridor || !fp.corridorW || fp.corridorW < 0.5) {
-        return fpBSP({x:0, y:0, w, h:floorH}, rooms);
+        return fpBSP({x:0, y:0, w, h:floorH}, sorted);
     }
     const cw = Math.min(fp.corridorW, w * 0.4); // max 40% of width
     const pos = fp.corridorPos || 'left';
@@ -3587,10 +3608,10 @@ function fpLayoutRooms(rooms, fp, w, floorH) {
 
     if (pos === 'center') {
         // Overlay: place rooms normally then add corridor on top
-        const bspRooms = fpBSP({x:0, y:0, w, h:floorH}, rooms);
+        const bspRooms = fpBSP({x:0, y:0, w, h:floorH}, sorted);
         return [...bspRooms, corrRoom];
     }
-    const bspRooms = roomW > 0.5 ? fpBSP({x:roomX, y:0, w:roomW, h:floorH}, rooms) : [];
+    const bspRooms = roomW > 0.5 ? fpBSP({x:roomX, y:0, w:roomW, h:floorH}, sorted) : [];
     return [corrRoom, ...bspRooms];
 }
 
@@ -3711,23 +3732,50 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
               onpointerdown="fpOnDown(event,${floorIdx},${ri},'resize')"/>`;
     }).join('');
 
-    // Main door indicator — position along wall (mainDoorPos: 0–1)
+    // Main door indicator — drawn as architectural door gap on the wall
     const dp = fp.mainDoorPos ?? 0.5;
     const DX = W * dp, DY = H * dp;
+    const DW = Math.min(W * 0.18, 40); // door width in px (max 40px)
+    const DH = Math.min(H * 0.12, 30); // door height (for left/right walls)
     let doorSVG = '', wallZonesSVG = '';
     if (isGround) {
-        if (fp.mainDoor==='front')
-            doorSVG=`<polygon points="${DX-7},${H+5} ${DX+7},${H+5} ${DX},${H-2}" fill="#2563eb"/>
-                     <text x="${DX}" y="${H+17}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
-        else if (fp.mainDoor==='back')
-            doorSVG=`<polygon points="${DX-7},-5 ${DX+7},-5 ${DX},2" fill="#2563eb"/>
-                     <text x="${DX}" y="-13" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
-        else if (fp.mainDoor==='left')
-            doorSVG=`<polygon points="-5,${DY-7} -5,${DY+7} 2,${DY}" fill="#2563eb"/>
-                     <text x="-14" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700" transform="rotate(-90,-14,${DY})">🚪</text>`;
-        else if (fp.mainDoor==='right')
-            doorSVG=`<polygon points="${W+5},${DY-7} ${W+5},${DY+7} ${W-2},${DY}" fill="#2563eb"/>
-                     <text x="${W+16}" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+        // Door drawn as: white gap on wall + arc (swing) + label outside
+        if (fp.mainDoor==='front') {
+            const x1 = DX - DW/2, x2 = DX + DW/2;
+            doorSVG = `
+            <!-- door gap on bottom wall -->
+            <line x1="${x1}" y1="${H}" x2="${x2}" y2="${H}" stroke="${fp.exteriorColor||'#fafafa'}" stroke-width="5"/>
+            <!-- door swing arc -->
+            <path d="M${x1},${H} A${DW},${DW} 0 0,1 ${x1},${H-DW}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+            <line x1="${x1}" y1="${H}" x2="${x1}" y2="${H-DW}" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="${x1}" y1="${H}" x2="${x2}" y2="${H}" stroke="#2563eb" stroke-width="2.5"/>
+            <!-- label below -->
+            <text x="${DX}" y="${H+14}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+        } else if (fp.mainDoor==='back') {
+            const x1 = DX - DW/2, x2 = DX + DW/2;
+            doorSVG = `
+            <line x1="${x1}" y1="0" x2="${x2}" y2="0" stroke="${fp.exteriorColor||'#fafafa'}" stroke-width="5"/>
+            <path d="M${x1},0 A${DW},${DW} 0 0,0 ${x1},${DW}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+            <line x1="${x1}" y1="0" x2="${x1}" y2="${DW}" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="${x1}" y1="0" x2="${x2}" y2="0" stroke="#2563eb" stroke-width="2.5"/>
+            <text x="${DX}" y="-8" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+        } else if (fp.mainDoor==='left') {
+            const y1 = DY - DH/2, y2 = DY + DH/2;
+            doorSVG = `
+            <line x1="0" y1="${y1}" x2="0" y2="${y2}" stroke="${fp.exteriorColor||'#fafafa'}" stroke-width="5"/>
+            <path d="M0,${y1} A${DH},${DH} 0 0,0 ${DH},${y1}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+            <line x1="0" y1="${y1}" x2="${DH}" y2="${y1}" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="0" y1="${y1}" x2="0" y2="${y2}" stroke="#2563eb" stroke-width="2.5"/>
+            <text x="-6" y="${DY}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+        } else if (fp.mainDoor==='right') {
+            const y1 = DY - DH/2, y2 = DY + DH/2;
+            doorSVG = `
+            <line x1="${W}" y1="${y1}" x2="${W}" y2="${y2}" stroke="${fp.exteriorColor||'#fafafa'}" stroke-width="5"/>
+            <path d="M${W},${y1} A${DH},${DH} 0 0,1 ${W-DH},${y1}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+            <line x1="${W}" y1="${y1}" x2="${W-DH}" y2="${y1}" stroke="#2563eb" stroke-width="1.5"/>
+            <line x1="${W}" y1="${y1}" x2="${W}" y2="${y2}" stroke="#2563eb" stroke-width="2.5"/>
+            <text x="${W+6}" y="${DY}" text-anchor="start" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+        }
 
         // Clickable wall strips: tap any wall to place door there at that exact position
         const Z = 14; // click zone half-thickness
