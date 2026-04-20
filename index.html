@@ -3002,7 +3002,7 @@ function renderFloorPlanView() {
         beds:3, baths:2, masterBed:false,
         living:true, kitchen:true, dining:false, altar:false, garage:false,
         laundry:false, maidRoom:false, balcony:false, rooftop:false,
-        facing:'south', mainDoor:'front', alley:'none', neighbor:'both',
+        facing:'south', mainDoor:'front', mainDoorPos:0.5, alley:'none', neighbor:'both',
         stairType:'straight', stairPos:'middle',
         style:'modern', roofType:'flat', exteriorColor:'#f5f0e8', material:'paint',
         garden:false, fence:false, furniture:true,
@@ -3521,14 +3521,39 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
               onpointerdown="fpOnDown(event,${floorIdx},${ri},'resize')"/>`;
     }).join('');
 
-    // Main door indicator
-    let doorSVG = '';
+    // Main door indicator — position along wall (mainDoorPos: 0–1)
+    const dp = fp.mainDoorPos ?? 0.5;
+    const DX = W * dp, DY = H * dp;
+    let doorSVG = '', wallZonesSVG = '';
     if (isGround) {
-        const dLabel = `<text text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa</text>`;
-        if (fp.mainDoor==='front')  doorSVG=`<polygon points="${W/2-7},${H+6} ${W/2+7},${H+6} ${W/2},${H-2}" fill="#2563eb"/><text x="${W/2}" y="${H+18}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa chính</text>`;
-        else if (fp.mainDoor==='back')  doorSVG=`<polygon points="${W/2-7},-6 ${W/2+7},-6 ${W/2},2" fill="#2563eb"/><text x="${W/2}" y="-12" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">Cửa chính</text>`;
-        else if (fp.mainDoor==='left')  doorSVG=`<polygon points="-6,${H/2-7} -6,${H/2+7} 2,${H/2}" fill="#2563eb"/>`;
-        else if (fp.mainDoor==='right') doorSVG=`<polygon points="${W+6},${H/2-7} ${W+6},${H/2+7} ${W-2},${H/2}" fill="#2563eb"/>`;
+        if (fp.mainDoor==='front')
+            doorSVG=`<polygon points="${DX-7},${H+5} ${DX+7},${H+5} ${DX},${H-2}" fill="#2563eb"/>
+                     <text x="${DX}" y="${H+17}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+        else if (fp.mainDoor==='back')
+            doorSVG=`<polygon points="${DX-7},-5 ${DX+7},-5 ${DX},2" fill="#2563eb"/>
+                     <text x="${DX}" y="-13" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+        else if (fp.mainDoor==='left')
+            doorSVG=`<polygon points="-5,${DY-7} -5,${DY+7} 2,${DY}" fill="#2563eb"/>
+                     <text x="-14" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700" transform="rotate(-90,-14,${DY})">🚪</text>`;
+        else if (fp.mainDoor==='right')
+            doorSVG=`<polygon points="${W+5},${DY-7} ${W+5},${DY+7} ${W-2},${DY}" fill="#2563eb"/>
+                     <text x="${W+16}" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+
+        // Clickable wall strips: tap any wall to place door there at that exact position
+        const Z = 14; // click zone half-thickness
+        wallZonesSVG = `
+        <rect x="0" y="${H-Z}" width="${W}" height="${Z*2}" fill="rgba(37,99,235,0.04)"
+              style="cursor:s-resize" onpointerdown="fpSetDoor(event,'front',${W},false)"
+              title="Nhấp để đặt cửa mặt trước"/>
+        <rect x="0" y="${-Z}" width="${W}" height="${Z*2}" fill="rgba(37,99,235,0.04)"
+              style="cursor:n-resize" onpointerdown="fpSetDoor(event,'back',${W},false)"
+              title="Nhấp để đặt cửa mặt sau"/>
+        <rect x="${-Z}" y="0" width="${Z*2}" height="${H}" fill="rgba(37,99,235,0.04)"
+              style="cursor:w-resize" onpointerdown="fpSetDoor(event,'left',${H},true)"
+              title="Nhấp để đặt cửa hông trái"/>
+        <rect x="${W-Z}" y="0" width="${Z*2}" height="${H}" fill="rgba(37,99,235,0.04)"
+              style="cursor:e-resize" onpointerdown="fpSetDoor(event,'right',${H},true)"
+              title="Nhấp để đặt cửa hông phải"/>`;
     }
 
     // Neighbor thick walls
@@ -3609,11 +3634,13 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
         ${neighborSVG}
         ${roomsSVG}
         ${stairShapeSVG}
+        ${wallZonesSVG}
         ${doorSVG}
         ${gardenSVG}
         ${fenceSVG}
         ${dimW}${dimH}
         ${compassSVG}
+        ${isGround?`<text x="${W/2}" y="${H+44}" text-anchor="middle" font-size="9" fill="#94a3b8">Nhấp vào tường để đặt cửa</text>`:''}
     </svg>
     </div>`;
 }
@@ -3677,21 +3704,23 @@ function fpOnDown(e, fi, ri, type) {
     if (S.view !== 'floorplan') return;
     e.preventDefault();
     e.stopPropagation();
-    // Init layout from BSP on first drag
     if (!S.fp.floorRooms) fpInitRooms();
     const svgEl = e.target.closest('svg');
     if (!svgEl || !S.fp.floorRooms[fi]) return;
-    const pt = svgEl.createSVGPoint();
-    pt.x = e.clientX; pt.y = e.clientY;
-    const p = pt.matrixTransform(svgEl.getScreenCTM().inverse());
     const r = S.fp.floorRooms[fi][ri];
     if (!r) return;
-    _fpDrag = { svgEl, fi, ri, type,
-                scale: S.fp._scale || 40,
-                sx: p.x, sy: p.y,
+    // Use getBoundingClientRect — works even after SVG re-render
+    const svgRect = svgEl.getBoundingClientRect();
+    const svgW    = parseFloat(svgEl.getAttribute('width')) || svgRect.width;
+    // pxPerScreen: how many SVG-pixels per screen-pixel (accounts for CSS max-width scaling)
+    const pxPerScreen = svgW / svgRect.width;
+    _fpDrag = { fi, ri, type,
+                pxPerMeter: S.fp._scale || 40,
+                pxPerScreen,
+                startX: e.clientX,
+                startY: e.clientY,
                 ox: r.x, oy: r.y, ow: r.w, oh: r.h };
     _fpSel = { fi, ri };
-    // Re-render to show selection highlight
     const out = document.getElementById('fp-output');
     if (out) out.innerHTML = genFloorPlanSVG(S.fp);
 }
@@ -3699,14 +3728,12 @@ function fpOnDown(e, fi, ri, type) {
 document.addEventListener('pointermove', function(e) {
     if (!_fpDrag) return;
     e.preventDefault();
-    const { svgEl, fi, ri, type, scale, sx, sy, ox, oy, ow, oh } = _fpDrag;
-    const pt = svgEl.createSVGPoint();
-    pt.x = e.clientX; pt.y = e.clientY;
-    const p = pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    const { fi, ri, type, pxPerMeter, pxPerScreen, startX, startY, ox, oy, ow, oh } = _fpDrag;
     const SNAP = 0.25;
     const snap = v => Math.round(v / SNAP) * SNAP;
-    const dx = (p.x - sx) / scale;
-    const dy = (p.y - sy) / scale;
+    // Delta: screen px → SVG px → meters
+    const dx = ((e.clientX - startX) * pxPerScreen) / pxPerMeter;
+    const dy = ((e.clientY - startY) * pxPerScreen) / pxPerMeter;
     const r = S.fp.floorRooms[fi][ri];
     if (!r) return;
     if (type === 'move') {
@@ -3723,8 +3750,26 @@ document.addEventListener('pointermove', function(e) {
 document.addEventListener('pointerup', function(e) {
     if (!_fpDrag) return;
     _fpDrag = null;
-    save(); // persist positions to Firebase
+    save();
 });
+
+// Set door wall + exact position by clicking on SVG wall
+function fpSetDoor(e, wall, wallLengthPx, isVertical) {
+    if (_fpDrag) return; // ignore if dragging a room
+    e.preventDefault();
+    e.stopPropagation();
+    const svgEl = e.target.closest('svg');
+    if (!svgEl) return;
+    const rect = svgEl.getBoundingClientRect();
+    // Calculate position (0–1) along the clicked wall
+    const pos = isVertical
+        ? Math.max(0.05, Math.min(0.95, (e.clientY - rect.top)  / rect.height))
+        : Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
+    S.fp.mainDoor    = wall;
+    S.fp.mainDoorPos = parseFloat(pos.toFixed(2));
+    fpRedraw();
+    save();
+}
 </script>
 </body>
 </html>
