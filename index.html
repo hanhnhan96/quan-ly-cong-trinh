@@ -3740,6 +3740,9 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
     let doorSVG = '', wallZonesSVG = '';
     if (isGround) {
         // Door drawn as: white gap on wall + arc (swing) + label outside
+        // totalW/totalH passed to fpDoorDown so pointermove can map client→SVG coords
+        const _dTW = W + 60, _dTH = H + 60 + (fp.garden ? 40 : 0);
+        const _dragAttr = `style="cursor:grab;touch-action:none" onpointerdown="fpDoorDown(event,${_dTW},${_dTH})"`;
         if (fp.mainDoor==='front') {
             const x1 = DX - DW/2, x2 = DX + DW/2;
             doorSVG = `
@@ -3749,8 +3752,9 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
             <path d="M${x1},${H} A${DW},${DW} 0 0,1 ${x1},${H-DW}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
             <line x1="${x1}" y1="${H}" x2="${x1}" y2="${H-DW}" stroke="#2563eb" stroke-width="1.5"/>
             <line x1="${x1}" y1="${H}" x2="${x2}" y2="${H}" stroke="#2563eb" stroke-width="2.5"/>
-            <!-- label below -->
-            <text x="${DX}" y="${H+14}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+            <!-- drag handle -->
+            <circle cx="${DX}" cy="${H}" r="7" fill="#2563eb" stroke="white" stroke-width="2" ${_dragAttr}/>
+            <text x="${DX}" y="${H+14}" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700" pointer-events="none">🚪 Cửa chính</text>`;
         } else if (fp.mainDoor==='back') {
             const x1 = DX - DW/2, x2 = DX + DW/2;
             doorSVG = `
@@ -3758,7 +3762,8 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
             <path d="M${x1},0 A${DW},${DW} 0 0,0 ${x1},${DW}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
             <line x1="${x1}" y1="0" x2="${x1}" y2="${DW}" stroke="#2563eb" stroke-width="1.5"/>
             <line x1="${x1}" y1="0" x2="${x2}" y2="0" stroke="#2563eb" stroke-width="2.5"/>
-            <text x="${DX}" y="-8" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700">🚪 Cửa chính</text>`;
+            <circle cx="${DX}" cy="0" r="7" fill="#2563eb" stroke="white" stroke-width="2" ${_dragAttr}/>
+            <text x="${DX}" y="-10" text-anchor="middle" font-size="9" fill="#2563eb" font-weight="700" pointer-events="none">🚪 Cửa chính</text>`;
         } else if (fp.mainDoor==='left') {
             const y1 = DY - DH/2, y2 = DY + DH/2;
             doorSVG = `
@@ -3766,7 +3771,8 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
             <path d="M0,${y1} A${DH},${DH} 0 0,0 ${DH},${y1}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
             <line x1="0" y1="${y1}" x2="${DH}" y2="${y1}" stroke="#2563eb" stroke-width="1.5"/>
             <line x1="0" y1="${y1}" x2="0" y2="${y2}" stroke="#2563eb" stroke-width="2.5"/>
-            <text x="-6" y="${DY}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+            <circle cx="0" cy="${DY}" r="7" fill="#2563eb" stroke="white" stroke-width="2" ${_dragAttr}/>
+            <text x="-16" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#2563eb" pointer-events="none">🚪</text>`;
         } else if (fp.mainDoor==='right') {
             const y1 = DY - DH/2, y2 = DY + DH/2;
             doorSVG = `
@@ -3774,7 +3780,8 @@ function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGrou
             <path d="M${W},${y1} A${DH},${DH} 0 0,1 ${W-DH},${y1}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
             <line x1="${W}" y1="${y1}" x2="${W-DH}" y2="${y1}" stroke="#2563eb" stroke-width="1.5"/>
             <line x1="${W}" y1="${y1}" x2="${W}" y2="${y2}" stroke="#2563eb" stroke-width="2.5"/>
-            <text x="${W+6}" y="${DY}" text-anchor="start" dominant-baseline="middle" font-size="9" fill="#2563eb" font-weight="700">🚪</text>`;
+            <circle cx="${W}" cy="${DY}" r="7" fill="#2563eb" stroke="white" stroke-width="2" ${_dragAttr}/>
+            <text x="${W+16}" y="${DY}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#2563eb" pointer-events="none">🚪</text>`;
         }
 
         // Clickable wall strips: tap any wall to place door there at that exact position
@@ -3916,8 +3923,9 @@ function genFloorPlanSVG(fp) {
 }
 
 // ===== FLOOR PLAN — DRAG & RESIZE =====
-let _fpDrag = null; // active drag state
-let _fpSel  = null; // selected room {fi, ri}
+let _fpDrag     = null; // active room drag state
+let _fpSel      = null; // selected room {fi, ri}
+let _fpDoorDrag = null; // active door drag state
 
 function fpInitRooms() {
     const fp = S.fp;
@@ -3963,7 +3971,51 @@ function fpOnDown(e, fi, ri, type) {
     if (out) out.innerHTML = genFloorPlanSVG(S.fp);
 }
 
+// Bắt đầu kéo cửa chính
+function fpDoorDown(e, svgNW, svgNH) {
+    if (S.view !== 'floorplan') return;
+    e.preventDefault(); e.stopPropagation();
+    const svgEl = e.target.closest('svg');
+    if (!svgEl) return;
+    const rect = svgEl.getBoundingClientRect();
+    _fpDoorDrag = {
+        svgNW, svgNH,
+        rl: rect.left, rt: rect.top, rw: rect.width, rh: rect.height
+    };
+}
+
 document.addEventListener('pointermove', function(e) {
+    // ── Kéo cửa chính ──
+    if (_fpDoorDrag) {
+        e.preventDefault();
+        const { svgNW, svgNH, rl, rt, rw, rh } = _fpDoorDrag;
+        // Client → SVG pixel coords
+        const sx = (e.clientX - rl) / rw * svgNW;
+        const sy = (e.clientY - rt) / rh * svgNH;
+        // Khoảng cách đến 4 tường
+        const dFront = Math.abs(sy - svgNH);
+        const dBack  = Math.abs(sy - 0);
+        const dLeft  = Math.abs(sx - 0);
+        const dRight = Math.abs(sx - svgNW);
+        const minD   = Math.min(dFront, dBack, dLeft, dRight);
+        const clamp  = v => Math.max(0.05, Math.min(0.95, parseFloat(v.toFixed(2))));
+        if (minD === dFront) {
+            S.fp.mainDoor = 'front';
+            S.fp.mainDoorPos = clamp(sx / svgNW);
+        } else if (minD === dBack) {
+            S.fp.mainDoor = 'back';
+            S.fp.mainDoorPos = clamp(sx / svgNW);
+        } else if (minD === dLeft) {
+            S.fp.mainDoor = 'left';
+            S.fp.mainDoorPos = clamp(sy / svgNH);
+        } else {
+            S.fp.mainDoor = 'right';
+            S.fp.mainDoorPos = clamp(sy / svgNH);
+        }
+        fpRedraw();
+        return;
+    }
+    // ── Kéo phòng ──
     if (!_fpDrag) return;
     e.preventDefault();
     const { fi, ri, type, pxPerMeter, pxPerScreen, startX, startY, ox, oy, ow, oh } = _fpDrag;
@@ -3986,6 +4038,7 @@ document.addEventListener('pointermove', function(e) {
 }, { passive: false });
 
 document.addEventListener('pointerup', function(e) {
+    if (_fpDoorDrag) { _fpDoorDrag = null; save(); return; }
     if (!_fpDrag) return;
     _fpDrag = null;
     save();
