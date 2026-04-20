@@ -3049,8 +3049,14 @@ function renderFloorPlanView() {
         </div>
 
         <!-- SVG OUTPUT -->
-        <div class="card" style="padding:12px;" id="fp-output">
-            ${genFloorPlanSVG(fp)}
+        <div class="card" style="padding:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--gray-100);">
+                <span style="font-size:11px;color:var(--gray-400);">✋ Kéo phòng để di chuyển &nbsp;·&nbsp; ◼ Kéo góc để resize</span>
+                <button onclick="fpResetRooms()" style="font-size:11px;padding:4px 10px;border:1px solid var(--gray-300);background:var(--gray-50);color:var(--gray-600);border-radius:6px;cursor:pointer;font-weight:600;">↺ Tự động</button>
+            </div>
+            <div id="fp-output">
+                ${genFloorPlanSVG(fp)}
+            </div>
         </div>
 
         </div>
@@ -3104,10 +3110,10 @@ function fpFormInner(fp) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);">
             <span style="font-size:13px;">${icon} ${label}</span>
             <div style="display:flex;align-items:center;gap:8px;">
-                <button onclick="S.fp.${key}=Math.max(${min},S.fp.${key}-1);fpRedraw()"
+                <button onclick="S.fp.${key}=Math.max(${min},S.fp.${key}-1);S.fp.floorRooms=null;fpRedraw()"
                     style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--gray-300);background:white;font-size:16px;cursor:pointer;">−</button>
                 <span style="font-size:15px;font-weight:700;min-width:22px;text-align:center;">${fp[key]}</span>
-                <button onclick="S.fp.${key}=Math.min(${max},S.fp.${key}+1);fpRedraw()"
+                <button onclick="S.fp.${key}=Math.min(${max},S.fp.${key}+1);S.fp.floorRooms=null;fpRedraw()"
                     style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--primary);background:var(--primary);color:white;font-size:16px;cursor:pointer;">+</button>
             </div>
         </div>`).join('')}
@@ -3116,7 +3122,7 @@ function fpFormInner(fp) {
         ${[['living','🛋️ Phòng khách'],['kitchen','🍳 Bếp + phòng ăn'],['dining','🪑 Phòng ăn riêng'],
            ['altar','🕯️ Phòng thờ'],['garage','🚗 Gara / sân để xe'],['maidRoom','🧹 Phòng giúp việc']].map(([key,label]) => `
         <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
-            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;S.fp.floorRooms=null;fpRedraw()"
                 style="width:16px;height:16px;accent-color:var(--primary);">
             <span style="font-size:13px;">${label}</span>
         </label>`).join('')}
@@ -3125,7 +3131,7 @@ function fpFormInner(fp) {
         ${[['masterBed','👑 Phòng ngủ master (có toilet riêng)'],['balcony','🌿 Ban công'],
            ['laundry','🪣 Phòng giặt / phơi'],['rooftop','☀️ Sân thượng sử dụng được']].map(([key,label]) => `
         <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
-            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;S.fp.floorRooms=null;fpRedraw()"
                 style="width:16px;height:16px;accent-color:var(--primary);">
             <span style="font-size:13px;">${label}</span>
         </label>`).join('')}
@@ -3240,7 +3246,7 @@ function fpFormInner(fp) {
         <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:10px;letter-spacing:.08em;">CHI TIẾT HIỂN THỊ</div>
         ${[['furniture','🪑 Hiển thị nội thất cơ bản'],['garden','🌿 Sân vườn / tiểu cảnh'],['fence','🧱 Cổng & tường rào']].map(([key,label]) => `
         <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;">
-            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;fpRedraw()"
+            <input type="checkbox" ${fp[key]?'checked':''} onchange="S.fp.${key}=this.checked;S.fp.floorRooms=null;fpRedraw()"
                 style="width:16px;height:16px;accent-color:var(--primary);">
             <span style="font-size:13px;">${label}</span>
         </label>`).join('')}
@@ -3480,15 +3486,15 @@ function fpFurnitureSVG(icon, rx, ry, rw, rh) {
     return '';
 }
 
-// Generate SVG for one floor
-function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel, fp, isGround) {
+// Generate SVG for one floor — accepts pre-laid rooms with x,y,w,h
+function fpFloorSVG(laid, floorWidth, floorHeight, scale, floorLabel, fp, isGround, floorIdx) {
     const W = floorWidth * scale, H = floorHeight * scale;
     const PAD = 2;
-    const laid = fpBSP({x:0, y:0, w:floorWidth, h:floorHeight}, rooms);
+    const HS = 11; // resize handle size
 
-    const roomsSVG = laid.map(r => {
+    const roomsSVG = laid.map((r, ri) => {
         const rx = r.x*scale+PAD, ry = r.y*scale+PAD;
-        const rw = r.w*scale-PAD*2, rh = r.h*scale-PAD*2;
+        const rw = Math.max(4, r.w*scale-PAD*2), rh = Math.max(4, r.h*scale-PAD*2);
         const cx = rx+rw/2, cy = ry+rh/2;
         const areaM = (r.w*r.h).toFixed(1);
         const fs = Math.max(9, Math.min(13, rw/8));
@@ -3496,14 +3502,23 @@ function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel, fp, isGro
         const showIcon = rw>40 && rh>36;
         const showArea = rw>50 && rh>48;
         const furn = fp.furniture ? fpFurnitureSVG(r.icon, rx, ry, rw, rh) : '';
+        const isSel = _fpSel && _fpSel.fi===floorIdx && _fpSel.ri===ri;
+        const stroke = isSel ? '#2563eb' : '#94a3b8';
+        const sw = isSel ? '2.5' : '1.5';
         return `
-        <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="#94a3b8" stroke-width="1.5" rx="3"/>
-        ${furn}
-        ${showIcon?`<text x="${cx}" y="${cy-(showArea?8:2)}" text-anchor="middle" font-size="${is}" dominant-baseline="middle">${r.icon||''}</text>`:''}
-        <text x="${cx}" y="${cy+(showIcon?is*.6:0)}" text-anchor="middle" dominant-baseline="middle"
-              font-size="${fs}" font-weight="600" fill="#334155">${r.name}</text>
-        ${showArea?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)+fs+3}" text-anchor="middle" dominant-baseline="middle"
-              font-size="${Math.max(8,fs-2)}" fill="#64748b">${areaM}m²</text>`:''}`;
+        <g style="cursor:move;touch-action:none;user-select:none" onpointerdown="fpOnDown(event,${floorIdx},${ri},'move')">
+            <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${r.color}" stroke="${stroke}" stroke-width="${sw}" rx="3"/>
+            ${furn}
+            ${showIcon?`<text x="${cx}" y="${cy-(showArea?8:2)}" text-anchor="middle" font-size="${is}" dominant-baseline="middle" pointer-events="none">${r.icon||''}</text>`:''}
+            <text x="${cx}" y="${cy+(showIcon?is*.6:0)}" text-anchor="middle" dominant-baseline="middle"
+                  font-size="${fs}" font-weight="600" fill="#334155" pointer-events="none">${r.name}</text>
+            ${showArea?`<text x="${cx}" y="${cy+(showIcon?is*.6:0)+fs+3}" text-anchor="middle" dominant-baseline="middle"
+                  font-size="${Math.max(8,fs-2)}" fill="#64748b" pointer-events="none">${areaM}m²</text>`:''}
+        </g>
+        <rect x="${rx+rw-HS}" y="${ry+rh-HS}" width="${HS}" height="${HS}"
+              fill="${isSel?'#2563eb':'#64748b'}" opacity="0.75" rx="2"
+              style="cursor:se-resize;touch-action:none"
+              onpointerdown="fpOnDown(event,${floorIdx},${ri},'resize')"/>`;
     }).join('');
 
     // Main door indicator
@@ -3587,7 +3602,8 @@ function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel, fp, isGro
         <span style="font-size:10px;color:var(--gray-400);">cao ${floorHeightVal}m • ${(floorWidth*floorHeight).toFixed(1)}m²</span>
     </div>
     <div style="overflow-x:auto;margin-bottom:4px;">
-    <svg width="${totalW}" height="${totalH}" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;">
+    <svg width="${totalW}" height="${totalH}" xmlns="http://www.w3.org/2000/svg"
+         style="display:block;max-width:100%;touch-action:none;" data-floor="${floorIdx}">
         ${alleySVG}
         <rect x="0" y="0" width="${W}" height="${H}" fill="${fp.exteriorColor||'#fafafa'}" stroke="#1e293b" stroke-width="3" rx="2"/>
         ${neighborSVG}
@@ -3605,17 +3621,110 @@ function fpFloorSVG(rooms, floorWidth, floorHeight, scale, floorLabel, fp, isGro
 function genFloorPlanSVG(fp) {
     const { w, l, numFloors } = fp;
     if (!w || !l || w < 2 || l < 2) return '<div class="empty"><div class="empty-desc">Nhập kích thước hợp lệ</div></div>';
-    const floors = fpBuildFloors(fp);
-    const floorH = parseFloat((l / (numFloors||1)).toFixed(2));
+    const n = numFloors || 1;
+    const floorH = parseFloat((l / n).toFixed(2));
     const scale = Math.min(420 / w, 50);
+    fp._scale = scale;
+    fp._floorH = floorH;
+    const DIVIDER = '<div style="height:20px;border-left:3px dashed var(--gray-200);margin-left:12px;padding-left:8px;font-size:10px;color:var(--gray-400);line-height:20px;">▲</div>';
     const floorNames = ['TẦNG TRỆT','TẦNG 1','TẦNG 2','TẦNG 3','TẦNG 4','TẦNG 5'];
+
+    // Use stored custom layout if available
+    if (fp.floorRooms && fp.floorRooms.length) {
+        return fp.floorRooms.map((laid, i) => {
+            if (!laid || !laid.length) return '';
+            const isRoof = fp.rooftop && i === fp.floorRooms.length - 1;
+            const label = isRoof ? 'SÂN THƯỢNG' : (floorNames[i] || `TẦNG ${i}`);
+            return fpFloorSVG(laid, w, floorH, scale, label, fp, i === 0, i);
+        }).join(DIVIDER);
+    }
+
+    // Auto BSP layout
+    const floors = fpBuildFloors(fp);
     return floors.map((rooms, i) => {
         if (!rooms.length) return '';
-        const isRoof = fp.rooftop && i === floors.length-1;
+        const isRoof = fp.rooftop && i === floors.length - 1;
         const label = isRoof ? 'SÂN THƯỢNG' : (floorNames[i] || `TẦNG ${i}`);
-        return fpFloorSVG(rooms, w, floorH, scale, label, fp, i===0);
-    }).join('<div style="height:20px;border-left:3px dashed var(--gray-200);margin-left:12px;padding-left:8px;font-size:10px;color:var(--gray-400);line-height:20px;">▲</div>');
+        const laid = fpBSP({x:0, y:0, w, h:floorH}, rooms);
+        return fpFloorSVG(laid, w, floorH, scale, label, fp, i === 0, i);
+    }).join(DIVIDER);
 }
+
+// ===== FLOOR PLAN — DRAG & RESIZE =====
+let _fpDrag = null; // active drag state
+let _fpSel  = null; // selected room {fi, ri}
+
+function fpInitRooms() {
+    const fp = S.fp;
+    if (!fp || !fp.w || !fp.l) return;
+    const floors = fpBuildFloors(fp);
+    const floorH = parseFloat((fp.l / (fp.numFloors||1)).toFixed(2));
+    const scale  = Math.min(420 / fp.w, 50);
+    fp._scale = scale;
+    fp._floorH = floorH;
+    fp.floorRooms = floors.map(rooms =>
+        rooms.length ? fpBSP({x:0, y:0, w:fp.w, h:floorH}, rooms).map(r => ({...r})) : []
+    );
+}
+
+function fpResetRooms() {
+    if (S.fp) { S.fp.floorRooms = null; }
+    _fpSel = null; _fpDrag = null;
+    fpRedraw();
+}
+
+function fpOnDown(e, fi, ri, type) {
+    if (S.view !== 'floorplan') return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Init layout from BSP on first drag
+    if (!S.fp.floorRooms) fpInitRooms();
+    const svgEl = e.target.closest('svg');
+    if (!svgEl || !S.fp.floorRooms[fi]) return;
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    const r = S.fp.floorRooms[fi][ri];
+    if (!r) return;
+    _fpDrag = { svgEl, fi, ri, type,
+                scale: S.fp._scale || 40,
+                sx: p.x, sy: p.y,
+                ox: r.x, oy: r.y, ow: r.w, oh: r.h };
+    _fpSel = { fi, ri };
+    // Re-render to show selection highlight
+    const out = document.getElementById('fp-output');
+    if (out) out.innerHTML = genFloorPlanSVG(S.fp);
+}
+
+document.addEventListener('pointermove', function(e) {
+    if (!_fpDrag) return;
+    e.preventDefault();
+    const { svgEl, fi, ri, type, scale, sx, sy, ox, oy, ow, oh } = _fpDrag;
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    const SNAP = 0.25;
+    const snap = v => Math.round(v / SNAP) * SNAP;
+    const dx = (p.x - sx) / scale;
+    const dy = (p.y - sy) / scale;
+    const r = S.fp.floorRooms[fi][ri];
+    if (!r) return;
+    if (type === 'move') {
+        r.x = snap(ox + dx);
+        r.y = snap(oy + dy);
+    } else { // resize SE corner
+        r.w = Math.max(SNAP * 2, snap(ow + dx));
+        r.h = Math.max(SNAP * 2, snap(oh + dy));
+    }
+    const out = document.getElementById('fp-output');
+    if (out) out.innerHTML = genFloorPlanSVG(S.fp);
+}, { passive: false });
+
+document.addEventListener('pointerup', function(e) {
+    if (!_fpDrag) return;
+    _fpDrag = null;
+    save(); // persist positions to Firebase
+});
 </script>
 </body>
 </html>
