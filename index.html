@@ -3023,6 +3023,7 @@ function renderFloorPlanView() {
         {k:'3d',     icon:'📦', label:'3D'},
         {k:'saved',  icon:'📁', label:`Đã lưu${savedCount?` (${savedCount})`:''}` },
     ];
+    if (!S.fpReq) S.fpReq = '';
     return `
     <div class="main-header">
         <div>
@@ -3031,6 +3032,41 @@ function renderFloorPlanView() {
         </div>
         <button onclick="fpDownload()" class="btn btn-outline" style="font-size:13px;white-space:nowrap;">⬇ Tải SVG</button>
     </div>
+
+    <!-- ── YÊU CẦU THIẾT KẾ ── -->
+    <div class="card" style="margin-bottom:12px;padding:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:18px;">💬</span>
+            <div>
+                <div style="font-size:13px;font-weight:700;color:var(--gray-900);">Mô tả yêu cầu thiết kế</div>
+                <div style="font-size:11px;color:var(--gray-400);">Nhập bằng tiếng Việt — sơ đồ tự cập nhật theo</div>
+            </div>
+        </div>
+        <textarea id="fp-req-text" rows="3"
+            style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;
+                   font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.6;
+                   color:var(--gray-900);background:var(--gray-50);"
+            placeholder="VD: Nhà rộng 5m dài 15m, 3 phòng ngủ có master, 2 toilet, có gara và phòng thờ, hướng nam, 2 tầng hiện đại, có hành lang bên trái..."
+            oninput="S.fpReq=this.value"
+        >${S.fpReq}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+            <button onclick="fpParseAndApply()"
+                style="padding:8px 16px;border-radius:8px;border:none;background:var(--primary);
+                       color:white;font-size:13px;font-weight:700;cursor:pointer;">
+                🔄 Áp dụng yêu cầu
+            </button>
+            <button onclick="document.getElementById('fp-req-text').value='';S.fpReq='';document.getElementById('fp-req-result').innerHTML='';"
+                style="padding:8px 12px;border-radius:8px;border:1px solid var(--gray-300);
+                       background:white;color:var(--gray-500);font-size:12px;cursor:pointer;">
+                ✕ Xóa
+            </button>
+            <div id="fp-req-result" style="flex:1;font-size:12px;line-height:1.5;"></div>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;background:var(--gray-50);border-radius:6px;font-size:11px;color:var(--gray-400);line-height:1.7;">
+            <strong>Gợi ý:</strong> kích thước (5x15m, rộng 5m dài 15m) · số tầng (2 tầng, 3 lầu) · phòng ngủ/WC · gara · phòng thờ · ban công · sân thượng · hành lang · hướng (nam/bắc/đông/tây) · phong cách (hiện đại/cổ điển/nhà vườn) · mái bằng/dốc
+        </div>
+    </div>
+
     <div class="tab-content">
         <div class="two-col" style="align-items:start;">
 
@@ -3906,6 +3942,149 @@ document.addEventListener('pointerup', function(e) {
     _fpDrag = null;
     save();
 });
+
+// ===== FLOOR PLAN — YÊU CẦU THIẾT KẾ (NATURAL LANGUAGE PARSER) =====
+
+function fpParseRequirements(raw) {
+    // Normalise: lowercase, convert Vietnamese number words
+    let t = raw.toLowerCase()
+        .replace(/một/g,'1').replace(/hai/g,'2').replace(/ba(?=\s)/g,'3')
+        .replace(/bốn/g,'4').replace(/năm(?=\s)/g,'5').replace(/sáu/g,'6')
+        .replace(/bảy/g,'7').replace(/tám/g,'8').replace(/chín/g,'9')
+        .replace(/mười/g,'10');
+
+    const changes = {};
+
+    // ── Kích thước ──
+    const dim = t.match(/(\d+\.?\d*)\s*[mx×]\s*(\d+\.?\d*)/);
+    if (dim) {
+        changes.w = {v: parseFloat(dim[1]), label:`Rộng ${dim[1]}m`};
+        changes.l = {v: parseFloat(dim[2]), label:`Dài ${dim[2]}m`};
+    }
+    const dW = t.match(/rộng\s+(\d+\.?\d*)/);  if (dW) changes.w = {v:parseFloat(dW[1]), label:`Rộng ${dW[1]}m`};
+    const dL = t.match(/dài\s+(\d+\.?\d*)/);   if (dL) changes.l = {v:parseFloat(dL[1]), label:`Dài ${dL[1]}m`};
+    const dD = t.match(/diện tích\s+(\d+\.?\d*)/); // "diện tích 75m²" (ignore – can't infer w/l)
+
+    // ── Số tầng ──
+    const fl = t.match(/(\d+)\s*tầng/);
+    if (fl) changes.numFloors = {v:Math.min(6,parseInt(fl[1])), label:`${fl[1]} tầng`};
+    const lu = t.match(/(\d+)\s*lầu/);
+    if (lu && !changes.numFloors) changes.numFloors = {v:Math.min(6,parseInt(lu[1])+1), label:`${parseInt(lu[1])+1} tầng`};
+    if (t.includes('nhà trệt') || t.includes('1 tầng') || t.match(/nhà\s+cấp\s+4/))
+        changes.numFloors = {v:1, label:'1 tầng (nhà trệt)'};
+
+    // ── Chiều cao tầng ──
+    const cg = t.match(/cao\s+tầng\s+trệt\s+(\d+\.?\d*)/);
+    if (cg) changes.groundH = {v:parseFloat(cg[1]), label:`Cao trệt ${cg[1]}m`};
+    const cl = t.match(/cao\s+tầng\s+lầu\s+(\d+\.?\d*)/);
+    if (cl) changes.floorH  = {v:parseFloat(cl[1]), label:`Cao lầu ${cl[1]}m`};
+
+    // ── Phòng ngủ ──
+    const bd = t.match(/(\d+)\s*(phòng ngủ|p\.ngủ|bedroom)/);
+    if (bd) changes.beds = {v:Math.min(8,parseInt(bd[1])), label:`${bd[1]} phòng ngủ`};
+
+    // ── Toilet / WC ──
+    const bt = t.match(/(\d+)\s*(toilet|wc|nhà vệ sinh|phòng tắm|lavabo)/);
+    if (bt) changes.baths = {v:Math.min(6,parseInt(bt[1])), label:`${bt[1]} WC`};
+
+    // ── Phòng boolean (có / không có) ──
+    const yes = (kws) => kws.some(k => t.includes(k));
+    const no  = (kws) => kws.some(k => t.match(new RegExp('không\\s*(có\\s*)?' + k)));
+
+    if (yes(['gara','garage','nhà xe','để xe'])) changes.garage  = {v:true,  label:'Gara'};
+    if (no (['gara','garage']))                  changes.garage  = {v:false, label:'Không gara'};
+    if (yes(['phòng thờ','bàn thờ']))            changes.altar   = {v:true,  label:'Phòng thờ'};
+    if (yes(['phòng khách']))                    changes.living  = {v:true,  label:'Phòng khách'};
+    if (yes(['bếp','nhà bếp']))                  changes.kitchen = {v:true,  label:'Bếp'};
+    if (yes(['phòng ăn riêng','bàn ăn riêng'])) changes.dining  = {v:true,  label:'Phòng ăn riêng'};
+    if (yes(['ban công','bancông']))             changes.balcony = {v:true,  label:'Ban công'};
+    if (yes(['sân thượng']))                     changes.rooftop = {v:true,  label:'Sân thượng'};
+    if (yes(['phòng giặt','phòng phơi','giặt đồ'])) changes.laundry  = {v:true, label:'Phòng giặt'};
+    if (yes(['giúp việc','người ở']))            changes.maidRoom= {v:true,  label:'Phòng giúp việc'};
+    if (yes(['sân vườn','tiểu cảnh','hồ cá']))   changes.garden  = {v:true,  label:'Sân vườn'};
+    if (yes(['cổng','tường rào','hàng rào']))     changes.fence   = {v:true,  label:'Cổng & rào'};
+    if (yes(['master','phòng ngủ lớn','phòng ngủ chính'])) changes.masterBed = {v:true, label:'Master bedroom'};
+
+    // ── Hành lang ──
+    if (yes(['hành lang','lối đi trong'])) {
+        changes.corridor = {v:true, label:'Hành lang'};
+        const cw = t.match(/hành lang\s+(\d+\.?\d*)\s*m/);
+        if (cw) changes.corridorW = {v:parseFloat(cw[1]), label:`Hành lang ${cw[1]}m`};
+        if (t.match(/hành lang.*bên\s*trái|trái.*hành lang/)) changes.corridorPos = {v:'left',   label:'Hành lang bên trái'};
+        if (t.match(/hành lang.*bên\s*phải|phải.*hành lang/)) changes.corridorPos = {v:'right',  label:'Hành lang bên phải'};
+        if (t.match(/hành lang.*giữa|giữa.*hành lang/))       changes.corridorPos = {v:'center', label:'Hành lang giữa'};
+    }
+
+    // ── Phong cách ──
+    if (t.includes('hiện đại'))                     changes.style = {v:'modern',     label:'Hiện đại'};
+    if (t.includes('tân cổ điển'))                  changes.style = {v:'neoclassic', label:'Tân cổ điển'};
+    else if (t.includes('cổ điển'))                 changes.style = {v:'classic',    label:'Cổ điển'};
+    if (t.includes('nhà vườn'))                     changes.style = {v:'garden',     label:'Nhà vườn'};
+    if (t.includes('tối giản') || t.includes('minimal')) changes.style = {v:'minimal', label:'Tối giản'};
+
+    // ── Mái ──
+    if (t.includes('mái bằng'))   changes.roofType = {v:'flat',  label:'Mái bằng'};
+    if (t.includes('mái dốc'))    changes.roofType = {v:'slope', label:'Mái dốc'};
+    if (t.match(/mái tam giác|mái đôi|mái nhọn/)) changes.roofType = {v:'gable', label:'Mái tam giác'};
+
+    // ── Hướng ──
+    const dirs = [
+        [/hướng\s*(đông nam)|mặt\s*(đông nam)/,'southeast','Đông Nam'],
+        [/hướng\s*(tây nam)|mặt\s*(tây nam)/,  'southwest','Tây Nam'],
+        [/hướng\s*(đông bắc)|mặt\s*(đông bắc)/,'northeast','Đông Bắc'],
+        [/hướng\s*(tây bắc)|mặt\s*(tây bắc)/,  'northwest','Tây Bắc'],
+        [/hướng\s*nam|mặt\s*nam/,               'south','Nam'],
+        [/hướng\s*bắc|mặt\s*bắc/,              'north','Bắc'],
+        [/hướng\s*đông|mặt\s*đông/,             'east','Đông'],
+        [/hướng\s*tây|mặt\s*tây/,              'west','Tây'],
+    ];
+    for (const [rx, val, lbl] of dirs) {
+        if (rx.test(t)) { changes.facing = {v:val, label:`Hướng ${lbl}`}; break; }
+    }
+
+    // ── Cầu thang ──
+    if (t.match(/cầu thang xoắn|cầu thang ốc|thang xoắn/)) changes.stairType = {v:'spiral', label:'Thang xoắn ốc'};
+    else if (t.match(/cầu thang chữ l|thang chữ l/))        changes.stairType = {v:'L',      label:'Thang chữ L'};
+    else if (t.match(/cầu thang chữ u|thang chữ u/))        changes.stairType = {v:'U',      label:'Thang chữ U'};
+    else if (t.match(/cầu thang thẳng/))                     changes.stairType = {v:'straight',label:'Thang thẳng'};
+
+    // ── Màu tường ──
+    const colorMap = {'trắng':'#ffffff','kem':'#f5f0e8','vàng':'#fef9c3','xanh':'#dbeafe','xám':'#e2e8f0','nâu':'#d4c5a9'};
+    for (const [cn, cv] of Object.entries(colorMap)) {
+        if (t.match(new RegExp('màu\\s*' + cn + '|tường\\s*' + cn))) {
+            changes.exteriorColor = {v:cv, label:`Màu ${cn}`}; break;
+        }
+    }
+
+    return changes;
+}
+
+function fpParseAndApply() {
+    const text = (document.getElementById('fp-req-text')?.value || S.fpReq || '').trim();
+    const resultEl = document.getElementById('fp-req-result');
+    if (!text) {
+        if (resultEl) resultEl.innerHTML = '<span style="color:var(--warning);">⚠️ Hãy nhập yêu cầu trước.</span>';
+        return;
+    }
+    S.fpReq = text;
+    const changes = fpParseRequirements(text);
+    const keys = Object.keys(changes);
+    if (keys.length === 0) {
+        if (resultEl) resultEl.innerHTML = '<span style="color:var(--warning);">⚠️ Không nhận ra yêu cầu cụ thể. Thử: "3 phòng ngủ, 2 toilet, nhà 5x15m, 2 tầng hiện đại"</span>';
+        return;
+    }
+    // Apply all changes
+    keys.forEach(k => { S.fp[k] = changes[k].v; });
+    S.fp.floorRooms = null; // reset custom layout
+    save();
+    const labels = keys.map(k => changes[k].label);
+    if (resultEl) resultEl.innerHTML =
+        `<span style="color:var(--success);font-weight:600;">✅ Đã áp dụng:</span>
+         <span style="color:var(--gray-700);"> ${labels.join(' · ')}</span>`;
+    // Re-render form tabs + SVG
+    fpFormUpdate();
+    fpRedraw();
+}
 
 // ===== FLOOR PLAN — SAVED DESIGNS =====
 
