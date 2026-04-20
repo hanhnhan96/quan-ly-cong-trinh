@@ -4044,6 +4044,35 @@ document.addEventListener('pointerup', function(e) {
     save();
 });
 
+// Mũi tên bàn phím di chuyển phòng đang chọn
+document.addEventListener('keydown', function(e) {
+    if (S.view !== 'floorplan') return;
+    if (!_fpSel) return;
+    const tag = (document.activeElement || {}).tagName || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // không can thiệp khi đang gõ
+
+    const { fi, ri } = _fpSel;
+    if (!S.fp.floorRooms || !S.fp.floorRooms[fi]) return;
+    const r = S.fp.floorRooms[fi][ri];
+    if (!r) return;
+
+    const STEP = e.shiftKey ? 1 : 0.25; // Shift → bước 1m, thường → 0.25m
+    let moved = true;
+    if      (e.key === 'ArrowLeft')  r.x = Math.max(0, r.x - STEP);
+    else if (e.key === 'ArrowRight') r.x = r.x + STEP;
+    else if (e.key === 'ArrowUp')    r.y = Math.max(0, r.y - STEP);
+    else if (e.key === 'ArrowDown')  r.y = r.y + STEP;
+    else moved = false;
+
+    if (moved) {
+        e.preventDefault();
+        fpRedraw();
+        clearTimeout(fpKeyDebounce);
+        fpKeyDebounce = setTimeout(save, 600); // lưu sau 0.6s không bấm thêm
+    }
+});
+let fpKeyDebounce = null;
+
 // ===== FLOOR PLAN — YÊU CẦU THIẾT KẾ (NATURAL LANGUAGE PARSER) =====
 
 function fpParseRequirements(raw) {
