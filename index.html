@@ -2591,51 +2591,200 @@ function doDisconnectFirebase() {
 }
 
 // ── Google Sheets sync ────────────────────────────────────
-function getSheetsUrl() { return localStorage.getItem(SHEETS_KEY) || ''; }
+const SHEETS_LAST_KEY = 'ct_sheets_last';
+function getSheetsUrl()      { return localStorage.getItem(SHEETS_KEY) || ''; }
+function getSheetsLastSync() { return localStorage.getItem(SHEETS_LAST_KEY) || ''; }
+function setSheetsLastSync() {
+    const t = new Date().toLocaleString('vi-VN');
+    localStorage.setItem(SHEETS_LAST_KEY, t);
+    updateSheetsBtn();
+}
 
 function updateSheetsBtn() {
     const btn = document.getElementById('sheets-btn');
     if (!btn) return;
-    const url = getSheetsUrl();
+    const url  = getSheetsUrl();
+    const last = getSheetsLastSync();
     btn.classList.toggle('configured', !!url);
-    btn.textContent = url ? '📊 Đồng bộ Sheets ✓' : '📊 Đồng bộ Google Sheets';
+    btn.textContent = url
+        ? (last ? `📊 Sheets ✓ ${last.slice(0,5)}` : '📊 Sheets ✓')
+        : '📊 Google Sheets';
+}
+
+// Xây dữ liệu structured: mỗi công trình = 1 sheet với đầy đủ thông tin
+function buildSheetsPayload() {
+    const now = new Date().toLocaleString('vi-VN');
+    const fmt  = n => Number((n||0).toFixed(0));
+    const vnd  = n => fmt(n).toLocaleString('vi-VN') + ' đ';
+
+    const sheets = S.projects.map(p => {
+        const ws     = projWorkers(p);
+        const att    = p.attendance || [];
+        const status = p.status === 'active' ? 'Đang thi công' : p.status === 'completed' ? 'Hoàn thành' : p.status || '';
+
+        // ── Tất cả ngày có chấm công ──────────────────
+        const allDates = [...new Set(att.map(a => a.date))].sort();
+
+        // ── Tính lương từng thợ ───────────────────────
+        const workerRows = ws.map((w, i) => {
+            const wAtt   = att.filter(a => (a.workerId||a.empId) === w.id);
+            const days   = wAtt.reduce((s,a) => s + recVal(a), 0);
+            const salary = wAtt.reduce((s,a) => s + recVal(a) * effectiveWage(w, a.date), 0);
+            const adv    = (p.advances||[]).filter(x=>x.workerId===w.id).reduce((s,x)=>s+(x.amount||0),0);
+            return [i+1, w.name||'', w.role||'', fmt(w.wage||0), days, fmt(salary), fmt(adv), fmt(salary-adv)];
+        });
+
+        // ── Chi tiết công từng ngày ───────────────────
+        const attHeader = ['Ngày', ...ws.map(w=>w.name||'')];
+        const attRows   = allDates.map(d => [
+            d, ...ws.map(w => {
+                const v = getAttVal(p, w.id, d);
+                return v === 0 ? '' : v === 1 ? '1' : String(v);
+            })
+        ]);
+
+        // ── Tổng kết tài chính ───────────────────────
+        const lc  = laborCost(p);
+        const mc  = materialCost(p);
+        const oc  = otherCost(p);
+        const tc  = lc + mc + oc;
+        const rev = p.revenue || 0;
+        const pnl = rev - tc;
+
+        const rows = [
+            [`CÔNG TRÌNH: ${p.name||''}`, '', '', '', '', `Cập nhật: ${now}`],
+            ['Địa chỉ:', p.address||'', '', 'Bắt đầu:', p.startDate||'', 'Trạng thái:', status],
+            [],
+            ['=== DANH SÁCH THỢ ==='],
+            ['STT','Họ tên','Nghề','Lương/ngày (đ)','Tổng công (ngày)','Tổng lương (đ)','Đã ứng (đ)','Còn lại (đ)'],
+            ...workerRows,
+            [],
+            ['=== TỔNG KẾT TÀI CHÍNH ==='],
+            ['Chi phí nhân công', fmt(lc)],
+            ['Chi phí vật liệu',  fmt(mc)],
+            ['Chi phí khác',       fmt(oc)],
+            ['Tổng chi phí',       fmt(tc)],
+            ['Doanh thu',          fmt(rev)],
+            ['Lợi nhuận',          fmt(pnl)],
+            [],
+            ['=== CHI TIẾT CHẤM CÔNG ==='],
+            attHeader,
+            ...attRows,
+        ];
+
+        return { name: (p.name||'Công trình').slice(0,31), rows };
+    });
+
+    return { syncedAt: now, sheets };
 }
 
 function mSheetsSync() {
-    const url = getSheetsUrl();
+    const url  = getSheetsUrl();
+    const last = getSheetsLastSync();
     if (!url) {
         return `<div class="modal-title">📊 Kết nối Google Sheets</div>
-        <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:14px;">
-            Dán URL của Google Apps Script Web App để đồng bộ dữ liệu với Google Sheets.
+        <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:8px;">
+            Mỗi công trình sẽ được ghi vào <strong>1 sheet riêng</strong> trong Google Sheets,
+            tự động cập nhật mỗi ngày lúc <strong>19:00</strong>.
+        </p>
+        <p style="font-size:12px;color:var(--gray-500);margin-bottom:14px;">
+            Bước 1: Tạo Google Sheets → Bước 2: Tạo Apps Script → Bước 3: Dán URL vào đây.
         </p>
         <label class="form-label">Apps Script Web App URL</label>
         <input id="sheets-url-input" type="url" class="form-input"
             placeholder="https://script.google.com/macros/s/.../exec"
             value="${esc(url)}">
-        <p style="font-size:11px;color:var(--gray-400);margin-top:6px;">
-            Xem hướng dẫn tạo Apps Script bên dưới ↓
-        </p>
+        <details style="margin-top:12px;">
+            <summary style="font-size:12px;color:var(--primary);cursor:pointer;font-weight:600;">📋 Xem code Google Apps Script</summary>
+            <pre id="gas-code" style="font-size:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-top:8px;overflow-x:auto;white-space:pre-wrap;max-height:220px;overflow-y:auto;">${esc(getGASCode())}</pre>
+            <button onclick="navigator.clipboard.writeText(getGASCode()).then(()=>alert('✅ Đã copy code!'))" style="margin-top:6px;font-size:11px;padding:4px 10px;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:6px;cursor:pointer;">📋 Copy code</button>
+        </details>
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
             <button class="btn btn-primary" onclick="doSavesSheetsUrl()">Lưu & Kết nối</button>
         </div>`;
     }
-    return `<div class="modal-title">📊 Đồng bộ Google Sheets</div>
-    <p style="font-size:13px;color:var(--gray-600);margin-bottom:16px;">Chọn chiều đồng bộ:</p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-        <button class="btn btn-primary" style="padding:14px;font-size:14px;" onclick="doSyncFromSheets()">
-            📥 Sheets → App
-            <div style="font-size:11px;font-weight:400;margin-top:3px;opacity:0.8;">Tải dữ liệu từ Google Sheets về app (ghi đè dữ liệu app)</div>
-        </button>
-        <button class="btn btn-success" style="padding:14px;font-size:14px;" onclick="doSyncToSheets()">
-            📤 App → Sheets
-            <div style="font-size:11px;font-weight:400;margin-top:3px;opacity:0.8;">Đẩy dữ liệu app lên Google Sheets (ghi đè dữ liệu Sheets)</div>
-        </button>
+
+    return `<div class="modal-title">📊 Google Sheets</div>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#166534;">
+        ✅ Đã kết nối · Tự động sync lúc <strong>19:00</strong> mỗi ngày
+        ${last ? `<br>🕐 Lần cuối: <strong>${last}</strong>` : ''}
     </div>
-    <div class="modal-footer" style="justify-content:space-between;">
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px;">
+        ${S.projects.length} công trình → ${S.projects.length} sheet tab
+    </div>
+    <button class="btn btn-success" style="width:100%;padding:13px;font-size:14px;margin-bottom:8px;" onclick="doSyncToSheets(true)">
+        📤 Đồng bộ ngay lên Sheets
+    </button>
+    <div class="modal-footer" style="justify-content:space-between;margin-top:8px;">
         <button class="btn btn-ghost btn-sm" onclick="doRemoveSheetsUrl()" style="color:var(--danger);">🔌 Ngắt kết nối</button>
         <button class="btn btn-outline" onclick="closeModal()">Đóng</button>
     </div>`;
+}
+
+// Code Google Apps Script để user copy vào script.google.com
+function getGASCode() {
+return `// ═══════════════════════════════════════════
+// Khánh Duy - Đồng bộ Google Sheets
+// Dán vào: script.google.com → New project
+// Deploy → Web app → Anyone can access
+// ═══════════════════════════════════════════
+
+const SHEET_ID = ''; // Dán ID Google Sheet vào đây
+// (lấy từ URL: docs.google.com/spreadsheets/d/[ID]/edit)
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    if (data.sheets) writeStructured(data);
+    return ok('sync done');
+  } catch(err) {
+    return ok('error: ' + err.message);
+  }
+}
+
+function writeStructured(data) {
+  const ss = SHEET_ID
+    ? SpreadsheetApp.openById(SHEET_ID)
+    : SpreadsheetApp.getActiveSpreadsheet();
+
+  data.sheets.forEach(sheetData => {
+    let sh = ss.getSheetByName(sheetData.name);
+    if (!sh) sh = ss.insertSheet(sheetData.name);
+    sh.clearContents();
+    sh.clearFormats();
+
+    const rows = sheetData.rows;
+    if (!rows.length) return;
+    sh.getRange(1, 1, rows.length, Math.max(...rows.map(r=>r.length||1)))
+      .setValues(rows.map(r => {
+        // Đảm bảo đủ cột
+        const maxCol = Math.max(...rows.map(x=>x.length||1));
+        while (r.length < maxCol) r.push('');
+        return r;
+      }));
+
+    // Format hàng tiêu đề (row 1)
+    sh.getRange(1, 1, 1, rows[0].length)
+      .setBackground('#1e3a5f').setFontColor('#ffffff')
+      .setFontWeight('bold').setFontSize(12);
+
+    // Format cột số tiền (cột 4-8 trong phần thợ)
+    sh.setColumnWidth(1, 40);
+    sh.setColumnWidth(2, 160);
+    sh.autoResizeColumns(3, 8);
+  });
+}
+
+function ok(msg) {
+  return ContentService.createTextOutput(msg)
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+// Chạy thử thủ công: Tools → Run → testSync
+function testSync() {
+  Logger.log('Apps Script OK - ' + new Date());
+}`;
 }
 
 function doSavesSheetsUrl() {
@@ -2653,50 +2802,49 @@ function doSavesSheetsUrl() {
 function doRemoveSheetsUrl() {
     if (!confirm('Ngắt kết nối Sheets? Dữ liệu cục bộ vẫn được giữ.')) return;
     localStorage.removeItem(SHEETS_KEY);
+    localStorage.removeItem(SHEETS_LAST_KEY);
     updateSheetsBtn();
     closeModal();
 }
 
-async function doSyncFromSheets() {
+async function doSyncToSheets(silent) {
     const url = getSheetsUrl();
     if (!url) return;
+    if (!silent && !confirm(`Đồng bộ ${S.projects.length} công trình lên Google Sheets?\nMỗi công trình = 1 sheet tab riêng.`)) return;
     closeModal();
     try {
-        const r = await fetch(url + '?action=get', { redirect: 'follow' });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const text = await r.text();
-        const d = JSON.parse(text);
-        if (d.error) throw new Error(d.error);
-        if (!d.workers && !d.projects) throw new Error('Dữ liệu không đúng định dạng');
-        if (!confirm(`Tải về: ${(d.workers||[]).length} thợ, ${(d.projects||[]).length} công trình.\nGhi đè dữ liệu app hiện tại?`)) return;
-        S.workers  = d.workers  || [];
-        S.projects = d.projects || [];
-        save(); renderAll();
-        alert('✅ Đồng bộ thành công từ Google Sheets!');
-    } catch(e) {
-        alert('❌ Lỗi kết nối Sheets:\n' + e.message + '\n\nKiểm tra lại URL Apps Script và đảm bảo đã deploy đúng cách.');
-    }
-}
-
-async function doSyncToSheets() {
-    const url = getSheetsUrl();
-    if (!url) return;
-    if (!confirm('Đẩy toàn bộ dữ liệu app lên Google Sheets?\n(Sẽ ghi đè dữ liệu trên Sheets)')) return;
-    closeModal();
-    try {
-        const body = JSON.stringify({ workers: S.workers, projects: S.projects });
-        // Dùng no-cors để tránh lỗi CORS với Apps Script
+        const payload = buildSheetsPayload();
         await fetch(url, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
-            body
+            body: JSON.stringify(payload)
         });
-        alert('✅ Đã gửi dữ liệu lên Google Sheets!');
+        setSheetsLastSync();
+        if (!silent) alert(`✅ Đã đồng bộ ${payload.sheets.length} công trình lên Google Sheets!`);
     } catch(e) {
-        alert('❌ Lỗi: ' + e.message);
+        if (!silent) alert('❌ Lỗi: ' + e.message);
     }
 }
+
+// Auto-sync lúc 19:00 mỗi ngày
+(function initAutoSync() {
+    const SYNC_HOUR = 19;
+    const AUTO_KEY  = 'ct_sheets_auto_date';
+    function checkAutoSync() {
+        const url = getSheetsUrl();
+        if (!url) return;
+        const now  = new Date();
+        if (now.getHours() < SYNC_HOUR) return;
+        const today = now.toISOString().slice(0,10);
+        if (localStorage.getItem(AUTO_KEY) === today) return; // đã sync hôm nay
+        localStorage.setItem(AUTO_KEY, today);
+        doSyncToSheets(true); // silent auto-sync
+    }
+    // Kiểm tra ngay khi mở app + mỗi phút
+    setTimeout(checkAutoSync, 5000);
+    setInterval(checkAutoSync, 60000);
+})();
 
 // ══════════════════════════════════════════════════════════
 //  ACTIONS
